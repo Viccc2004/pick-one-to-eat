@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>pick-one-to-eat</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, sans-serif;
+        max-width: 34rem;
+        margin: 4rem auto;
+        padding: 0 1rem;
+        line-height: 1.5;
+        color: #1a1a1a;
+      }
+      h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+      .sub { color: #666; margin-top: 0; font-size: 0.9rem; }
+      form { display: flex; gap: 0.5rem; margin: 1.5rem 0; }
+      input[type="text"] {
+        flex: 1;
+        padding: 0.6rem 0.75rem;
+        font-size: 1rem;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+      }
+      button {
+        padding: 0.6rem 1.1rem;
+        font-size: 1rem;
+        border: 0;
+        border-radius: 6px;
+        background: #1a1a1a;
+        color: #fff;
+        cursor: pointer;
+      }
+      .card {
+        border: 1px solid #e2e2e2;
+        border-radius: 10px;
+        padding: 1.25rem;
+        background: #fafafa;
+      }
+      .card h2 { margin: 0 0 0.4rem; font-size: 1.2rem; }
+      .card p { margin: 0; color: #333; }
+      .more { display: inline-block; margin-top: 1rem; font-size: 0.9rem; }
+      .empty { color: #666; }
+      .stub {
+        margin-top: 2.5rem;
+        padding-top: 1rem;
+        border-top: 1px solid #eee;
+        font-size: 0.8rem;
+        color: #888;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>pick-one-to-eat</h1>
+    <p class="sub">Say what you feel like eating. Get one place.</p>
+
+    <form action="/" method="get">
+      <input
+        type="text"
+        name="q"
+        value="{{ q }}"
+        placeholder="cheap chinese food in Allston, open now"
+        autofocus
+      />
+      <button type="submit">Pick one</button>
+    </form>
+
+    {% if place %}
+      <div class="card">
+        <h2>{{ place.name }}</h2>
+        <p>{{ reason }}</p>
+      </div>
+      {% if has_more %}
+        <a class="more" href="/?q={{ q | urlencode }}&rank={{ rank + 1 }}"
+          >Not this one - show me another</a
+        >
+      {% endif %}
+    {% elif q %}
+      <p class="empty">Nothing came back for that. Try different words.</p>
+    {% endif %}
+
+    <p class="stub">
+      M2: results come from hand-written fixtures, not the live Places API.
+      Ranking and reasoning are placeholder rules, not an LLM.
+    </p>
+  </body>
+</html>
