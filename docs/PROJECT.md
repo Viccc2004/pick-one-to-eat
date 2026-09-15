@@ -6,12 +6,37 @@ and are stated here only as conclusions.
 
 ---
 
+## 0. Working rules
+
+These are the standing constraints every milestone is held to. They were
+previously cited as "CLAUDE.md §4/§5/§7/§8"; that file is not in the
+repository, so the rules are stated here and this section is now the
+authority. Citations elsewhere in this document point here.
+
+- **Frontend.** Server-rendered HTML. No React, no JS framework, no build
+  step. Small amounts of hand-written vanilla JS are allowed where the
+  browser is the only source of a value (see § 3.3, geolocation).
+- **Dev cache.** Development must run against a local cache, so debugging
+  does not hit the live API on every run. Constrained by Google's terms —
+  see § 3.1.
+- **Definition of Done**, applied to every milestone: it runs end to end;
+  pytest covers the happy path plus at least one edge case; README is
+  updated; the work is committed and pushed; and every file in the repo
+  can be explained out loud.
+- **Document layout.** `README.md` and `BACKLOG.md` at the root;
+  `PROJECT.md` and `DECISIONS.md` under `docs/`.
+
+---
+
 ## 1. Product
 
 Describe what you want to eat in one sentence. Get back one restaurant and one
 sentence explaining why it fits what you asked for.
 
-### Shape (settled 2026-09-11)
+**Status as of 2026-09-15:** M0–M2 done. The app runs end to end on fixtures
+with 16 passing tests. M3 is next.
+
+### Shape (settled 2026-09-11, conversation row revised 2026-09-15)
 
 | Aspect | Decision |
 | --- | --- |
@@ -19,7 +44,7 @@ sentence explaining why it fits what you asked for.
 | Ranking | LLM ranks a top-3 internally |
 | Output | **One** restaurant shown, with one sentence of reasoning |
 | Held back | Ranks 2 and 3 are kept for a "show me another" action |
-| Conversation | Pseudo-multi-turn: the client resends prior turns, the server stays stateless |
+| Conversation | None. One sentence in, one answer out. The server is stateless: query and candidate index travel in the URL |
 | Interface | Web page — FastAPI backend, server-rendered HTML, no JS framework |
 | Data source | Google Places API (New), Text Search |
 
@@ -30,9 +55,10 @@ conditions.
 
 ### Out of scope for v1
 
-User accounts, saved favorites, maps, multiple data sources, real multi-turn
-slot filling (the LLM asking follow-up questions), deployment, wait-time or
-queue-length features. Anything cut goes to [../BACKLOG.md](../BACKLOG.md).
+User accounts, saved favorites, maps, multiple data sources, conversation
+history of any kind — neither the page resending prior turns nor the LLM asking
+follow-up questions — deployment, wait-time or queue-length features. Anything
+cut goes to [../BACKLOG.md](../BACKLOG.md).
 
 ---
 
@@ -128,9 +154,9 @@ narrow exceptions: `place_id` may be stored indefinitely (Google suggests
 refreshing IDs older than 12 months), and latitude/longitude may be cached for
 up to 30 consecutive days.
 
-CLAUDE.md §5 requires a local cache during development so that debugging does
-not hit the live API every run. That requirement and these terms are compatible,
-but only if the cache is built deliberately:
+§ 0 requires a local cache during development so that debugging does not hit
+the live API every run. That requirement and these terms are compatible, but
+only if the cache is built deliberately:
 
 - Dev cache TTL stays well inside 30 days — 24 hours is enough for debugging and
   leaves no ambiguity.
@@ -164,10 +190,22 @@ exit condition.
 ### 3.3 Frontend
 
 FastAPI with server-rendered HTML templates, one page, one form. No React, no
-build step, per CLAUDE.md §4. "Pseudo-multi-turn" means the page keeps prior
-turns in the form and resends them; the server holds no session state. This
-removes session storage, session expiry, and a state machine from v1 entirely,
-and can be upgraded later without touching the ranking pipeline.
+build step, per § 0.
+
+The server holds no session state. The query string and which candidate to show
+travel in the URL (`/?q=...&rank=1`), so "show me another" is a plain link and
+needs no session storage, no expiry, and no state machine. Carrying prior turns
+in the form was in scope until 2026-09-15 and is now in
+[../BACKLOG.md](../BACKLOG.md); it can be added later without touching the
+ranking pipeline.
+
+**Location comes from browser geolocation** (settled 2026-09-15). This is the
+one place the page runs JavaScript: a few lines of vanilla `navigator.geolocation`
+that fill a hidden lat/lng field before submit. That is consistent with § 0 — the
+rule bans frameworks and build steps, not the browser API that is the only source
+of this value. Two consequences to build for in M3: the API requires a secure
+context, which `127.0.0.1` satisfies, so local development works without HTTPS;
+and permission can be denied or unavailable, so a fallback location must exist.
 
 ### 3.4 Cost per query
 
@@ -205,7 +243,7 @@ are recorded in [DECISIONS.md](DECISIONS.md); their conclusions survive the
 change in product shape. From M2 on, every milestone is a **vertical slice**:
 it ends with something that runs end to end.
 
-Definition of Done for each is CLAUDE.md §7 — end-to-end run, pytest covering
+Definition of Done for each is the one in § 0 — end-to-end run, pytest covering
 the happy path plus one edge case, README updated, committed and pushed, and
 able to explain out loud what every file does.
 
@@ -214,17 +252,20 @@ able to explain out loud what every file does.
 Text Search returns real restaurants for a natural-language query. Confirmed the
 API cannot index menus, which is why a ranking layer exists at all.
 
-### M1 — Schema and function split, designed ⚠️ not implemented
+### M1 — Schema and function split, designed ✅ absorbed into M2
 
 `search_places` / `parse_places` split at the network boundary, the six-field
-internal schema, and per-field missing-value handling are all decided and
-documented. **The code is still at M0.** M1 is not a separate milestone going
-forward — its implementation is absorbed into M2, where it can be built entirely
-against fixtures for $0.
+internal schema, and per-field missing-value handling were decided and
+documented here, then implemented as part of M2 against fixtures for $0. M1 is
+not a separate milestone going forward.
 
-### M2 — End-to-end skeleton, zero API calls
+Note on numbering: the M1 entries in DECISIONS.md say "M3" where they mean the
+ranking and reasoning layer. Under the current plan that layer is M2 (rule stub)
+and M4 (LLM); M3 is the live-data milestone.
 
-A weekend's work, and the first thing that runs end to end.
+### M2 — End-to-end skeleton, zero API calls ✅ done (commit `71592fe`)
+
+The first thing that runs end to end.
 
 - FastAPI app, one page: a text input and a result.
 - 10 hand-written fixture restaurants in the M1 schema, including deliberately
@@ -233,8 +274,8 @@ A weekend's work, and the first thing that runs end to end.
 - A stubbed reason sentence — a fixed template, no LLM.
 - `requirements.txt`, venv, `.env.example`.
 
-Exit: type a sentence in a browser, get one restaurant and one sentence back,
-with no network call and no API key.
+Exit ✅: typing a sentence in a browser returns one restaurant and one sentence,
+with no network call and no API key. 16 tests pass.
 
 ### M3 — Real data
 
@@ -243,10 +284,14 @@ Replace the fixtures with live Places calls.
 - `search_places` with a timeout, error handling, and a 24-hour local cache.
 - Field mask set to the M1 schema, accepting the Enterprise SKU.
 - Quota cap set in the Google console before the first call.
+- Browser geolocation: a hidden lat/lng field filled by vanilla JS, passed to
+  Places as location bias, with a fallback location for denied or unavailable
+  permission.
 - The incomplete-response path stays covered by the M2 fixtures.
 
-Exit: the same page, now backed by real Boston restaurants, with the API down
-producing a clear message rather than a traceback.
+Exit: the same page, now backed by real restaurants near the user, with the API
+down — or geolocation refused — producing a clear message rather than a
+traceback.
 
 ### M4 — The LLM layer
 
@@ -276,8 +321,11 @@ Exit: a prompt change can be shown to improve or hurt the score, with evidence.
 
 ## 5. Open questions
 
-- **Location.** M0 hardcoded "Allston Boston." Not yet decided whether location
-  comes from the user's sentence, a fixed home location in `.env`, or browser
-  geolocation. Blocks M3, not M2.
-- **`place_type` usefulness.** In the schema since M1, but no consumer has been
-  defined. Decide by M4 or drop it.
+- **~~Location.~~** Settled 2026-09-15: browser geolocation, with a fallback for
+  denied permission. See § 3.3 and DECISIONS.md.
+- **`place_type` usefulness.** In the schema since M1, extracted by
+  `parse_places`, but still has no consumer — M2's rule-based ranker ignores it.
+  Decide by M4 or drop it.
+- **Geolocation fallback value.** M3 needs one concrete fallback when the
+  browser refuses. "Allston, Boston" from M0 is the obvious placeholder; decide
+  whether it stays hardcoded or moves to `.env`.

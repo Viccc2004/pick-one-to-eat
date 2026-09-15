@@ -1,6 +1,18 @@
 # Decisions
 
-One entry per decision, grouped by milestone, oldest first.
+One entry per decision, grouped by milestone, oldest first. This is a log:
+earlier entries are left as written and are corrected by later ones, never
+edited in place. Where an entry has been superseded it says so and names the
+entry that replaced it.
+
+Two standing reads for anything in the M0/M1 sections:
+
+- Those entries were written against a CLI product and a different milestone
+  numbering. Where they say **M3**, they mean the ranking and reasoning layer,
+  which under the current plan is M2 (rule-based stub) and M4 (LLM). M3 is now
+  the live-data milestone.
+- The interface parts of that spec are superseded by
+  § Product redefinition — 2026-09-11.
 
 ## M0 — 2026-09-01
 
@@ -77,9 +89,14 @@ in case the output ever needs to tell the user how to get there.
 4.8 with 3 reviews and 4.8 with 2000 reviews are not comparable.
 M3 must not filter on rating alone.
 
-### Exit condition
+### Exit condition — superseded 2026-09-11
 Running find.py prints N restaurants, one per line,
 using the fields above, without crashing on incomplete API responses.
+
+This was a CLI exit condition. find.py no longer has a `__main__`; the
+equivalent guarantee is now M2's exit condition — the web page renders a
+restaurant without crashing on incomplete input — and is covered by
+`tests/test_find.py`.
 
 ## Product redefinition — 2026-09-11
 
@@ -90,18 +107,22 @@ M1 schema and function split survive unchanged.
 ### Web page replaces the CLI
 The interface is a FastAPI app serving one server-rendered HTML page,
 not a command-line tool. README's v1 scope and the BACKLOG entry that
-deferred Web UI to Phase 3 are both superseded and need rewriting.
+deferred Web UI to Phase 3 were both superseded; both were rewritten in
+commit `c97bfb8`.
 
 ### Rank three internally, show one
 The LLM ranks a top-3; the page shows rank 1 only and holds ranks 2 and
 3 for a "show me another" action. Keeps the product's opinionated
 single answer while reusing candidates already paid for.
 
-### Pseudo-multi-turn, stateless server
+### Pseudo-multi-turn, stateless server — partly superseded 2026-09-15
 The page resends prior turns with each request; the server keeps no
 session state. Gives the conversational feel of changing a condition
 and recomputing without introducing session storage, expiry, or a state
 machine into v1.
+
+The stateless-server half stands and is implemented. The resending-prior-turns
+half was cut — see § Single turn, not pseudo-multi-turn (2026-09-15).
 
 ### Reasoning may only cite supported conditions
 The reason sentence may reference only conditions the data actually
@@ -153,4 +174,110 @@ and can be handled.
 
 ### Docs move to docs/
 `DECISIONS.md` moves to `docs/DECISIONS.md` and `docs/PROJECT.md` is
-added, per CLAUDE.md §8. `README.md` and `BACKLOG.md` stay at the root.
+added. `README.md` and `BACKLOG.md` stay at the root. This layout rule, and
+the other standing rules once cited as "CLAUDE.md §4/§5/§7/§8", now live in
+PROJECT.md § 0 — that file is not in the repository and the citations were
+dangling.
+
+## M2 — 2026-09-11
+
+Implemented in commit `71592fe`, together with the M1 design that had never
+been written as code.
+
+### search_places reads fixtures at M2
+`search_places` loads `fixtures/places_sample.json` instead of calling
+Google. The function signature and return shape are already the real
+ones, so M3 replaces the body and nothing downstream changes. This is
+what lets the entire pipeline — parsing, ranking, reason generation,
+rendering — be built and tested for $0, before an API key exists.
+
+Ten hand-written fixtures, seven complete and three deliberately
+incomplete: one missing `rating`/`userRatingCount`, one missing
+`priceLevel`, one missing `currentOpeningHours`, and one missing
+`displayName` entirely to exercise the drop path.
+
+### Ranking rule at M2: trusted ratings first, original order behind
+`rank_places` is a fixed rule, not an LLM — the LLM arrives at M4. It
+splits candidates into trusted and untrusted, sorts the trusted ones by
+rating, and leaves the untrusted ones in their original order behind
+them.
+
+The point is the second half. An unrated restaurant is unknown, not bad.
+Sorting it by a coerced 0 would rank it below a genuinely 1-star place,
+which is a claim the data does not support. Keeping original order makes
+no claim at all, which is the honest position and matches the M1 rule
+that missing values are not coerced.
+
+### MIN_TRUSTED_RATING_COUNT = 50
+A rating is used for ranking only when `rating_count >= 50`. This puts a
+number on the M1 rule that `rating` and `rating_count` must be evaluated
+together: 4.8 from 3 reviews is not comparable to 4.8 from 2,000.
+
+50 is a judgement call, not a derived value, and it is the kind of
+threshold M5's eval exists to test. It is a named module-level constant
+in `recommend.py` precisely so the eval can move it and measure the
+difference.
+
+### Stateless via URL parameters
+The query and the index of the candidate being shown both live in the
+URL (`/?q=...&rank=1`). "Show me another" is an ordinary link, not a
+POST, not a session. The server stores nothing, the browser's back
+button works, and a result is a shareable link for free.
+
+`rank` is clamped to the candidate list rather than trusted, so a
+hand-edited URL cannot produce an IndexError.
+
+### Reason clauses are guarded by the field they cite
+`build_reason` builds a clause list where every clause is gated on the
+field it depends on, and a `None` field contributes nothing. When no
+field is available the output says so outright. `open_now is None` adds
+an explicit "opening hours are unknown — call ahead."
+
+This is the M0/M1 rule "reasoning may only cite supported conditions"
+implemented structurally rather than by prompt instruction — at M2 there
+is no prompt. M4 has to reproduce this guarantee with an LLM, which is
+harder, and that is why M4 is its own milestone.
+
+## Scope alignment — 2026-09-15
+
+A pass over all four markdown files to remove conflicts between them and
+against the code.
+
+### Single turn, not pseudo-multi-turn
+v1 sends one sentence and gets one answer, plus "show me another." The
+page does not carry prior turns.
+
+"The client resends prior turns" appeared in README, PROJECT.md, and the
+2026-09-11 decision above, but was never assigned to a milestone and is
+not in the M2 code. It would have landed on M4, which is already the
+riskiest milestone and already owns the open question the project exists
+to answer. Cut to [../BACKLOG.md](../BACKLOG.md) rather than left as
+scope nobody scheduled.
+
+The stateless-server property that entry was protecting is unaffected —
+it is delivered by URL parameters instead.
+
+### Location comes from browser geolocation
+Closes the open question that had been "blocks M3." The page fills a
+hidden lat/lng field with `navigator.geolocation` and passes it to
+Places as location bias.
+
+Chosen over a fixed `.env` home location because a fixed location makes
+the recommendation wrong for the user standing somewhere else, and over
+LLM extraction from the sentence because that would make M3 depend on
+M4's LLM call.
+
+Cost: this is the first JavaScript in the project. It stays compatible
+with the no-framework rule — a handful of vanilla lines calling a
+browser API is not a framework and needs no build step — but it must be
+built with two failure paths in mind. The API needs a secure context,
+which `127.0.0.1` satisfies, so localhost is fine. Permission can be
+denied or the call can time out, so a fallback location is required, not
+optional. Which fallback is still open; see PROJECT.md § 5.
+
+### Standing rules moved into PROJECT.md § 0
+Four places cited "CLAUDE.md §4/§5/§7/§8" — including the Definition of
+Done every milestone is measured against — for a file that is not in the
+repository. The cited rules are now stated in PROJECT.md § 0, which is
+the authority going forward. No rule was invented: each was already
+written out alongside the citation that referenced it.

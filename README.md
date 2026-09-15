@@ -3,6 +3,10 @@
 Describe what you want to eat in one sentence. Get back one restaurant
 and one line explaining why.
 
+**Status:** M2 complete — the app runs end to end on fixtures, no API key
+and no network call. M3 (real Places data) is next. Milestones live in
+[docs/PROJECT.md](docs/PROJECT.md) § 4.
+
 ## v1 scope
 
 Anything outside this list goes to BACKLOG.md and does not get built.
@@ -10,16 +14,18 @@ Anything outside this list goes to BACKLOG.md and does not get built.
 - Interface: a web page — FastAPI backend, server-rendered HTML
 - Input: a single natural-language sentence
 - Output: **one** restaurant, one sentence of reasoning
-- Ranking: an LLM ranks a top-3 internally; ranks 2 and 3 are held back
-  for a "show me another" action
-- Conversation: the page resends prior turns, the server stays stateless
+- Ranking: a top-3 is ranked internally; ranks 2 and 3 are held back for
+  a "show me another" action. A rule ranks them at M2, an LLM from M4
+- Conversation: none. Each request is one sentence in, one answer out.
+  The server holds no session state — the query and which candidate to
+  show both travel in the URL
 - Data source: Google Places API (New), and nothing else
 
 ## Explicitly out of scope
 
 User accounts, saved favorites, maps, additional data sources,
-deployment, real multi-turn follow-up questions (the app asking *you*
-something), wait-time or queue-length features.
+deployment, conversation history of any kind — including the app asking
+*you* a follow-up question — wait-time or queue-length features.
 
 ## Project type
 
@@ -40,7 +46,7 @@ Then open http://127.0.0.1:8000
 
 No environment variables are needed yet. M2 runs entirely on the
 hand-written fixtures in `fixtures/`, so there is no API key, no network
-call, and no cost. `.env` becomes necessary at M3 - copy `.env.example`
+call, and no cost. `.env` becomes necessary at M3 — copy `.env.example`
 and fill it in then.
 
 Tests:
@@ -51,8 +57,8 @@ pytest
 
 ## Documents
 
-- [docs/PROJECT.md](docs/PROJECT.md) — requirements, technology
-  comparisons, milestones
+- [docs/PROJECT.md](docs/PROJECT.md) — working rules, requirements,
+  technology comparisons, milestones
 - [docs/DECISIONS.md](docs/DECISIONS.md) — one entry per settled
   technical decision
 - [BACKLOG.md](BACKLOG.md) — deliberately not in v1
