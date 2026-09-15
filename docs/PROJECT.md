@@ -33,8 +33,9 @@ authority. Citations elsewhere in this document point here.
 Describe what you want to eat in one sentence. Get back one restaurant and one
 sentence explaining why it fits what you asked for.
 
-**Status as of 2026-09-15:** M0–M2 done. The app runs end to end on fixtures
-with 16 passing tests. M3 is next.
+**Status as of 2026-09-15:** M0–M2 done, M3.2 done. The app runs end to end on
+fixtures with 31 passing tests; the spend guards are built but no live call has
+been made yet. M3.3 is next, and is the first step that spends money.
 
 ### Shape (settled 2026-09-11, conversation row revised 2026-09-15)
 
@@ -206,6 +207,29 @@ rule bans frameworks and build steps, not the browser API that is the only sourc
 of this value. Two consequences to build for in M3: the API requires a secure
 context, which `127.0.0.1` satisfies, so local development works without HTTPS;
 and permission can be denied or unavailable, so a fallback location must exist.
+The fallback is **"Allston, Boston"** (settled 2026-09-15) — the location M0 was
+validated against — as a named constant in `find.py`, not a `.env` variable. It
+carries nothing secret and nothing deployment-specific, and putting it in `.env`
+would let a half-filled `.env` break the app for no benefit while deployment is
+out of scope.
+
+The two paths reach Places differently, and deliberately so:
+
+- **Geolocation succeeded** → lat/lng go in as a Text Search `locationBias`.
+- **Geolocation refused or unavailable** → the string is appended to the query
+  text. This is exactly what M0 did and validated; Text Search resolves place
+  names itself.
+
+The fallback is **not** geocoded into coordinates. Turning the string into
+lat/lng would require the Geocoding API — a second billable API, a second
+failure mode, and a second call on the path that is already the degraded one.
+Appending text costs nothing and reuses matching that is already being paid for.
+This is why Geocoding API stays disabled (§ 3.6).
+
+One naming trap worth recording: `navigator.geolocation` is the **browser's**
+W3C API — free, no key, unrelated to Google. Google's own **Geolocation API** is
+a different, billable, server-side product that infers position from cell and
+WiFi signals. This project uses the former and must never enable the latter.
 
 ### 3.4 Cost per query
 
@@ -232,7 +256,99 @@ Development-time spend control, in order of effect:
 2. A 24-hour local cache keyed by query string, so re-running the same debug
    query is free.
 3. Both API keys in `.env`, both quotas capped in their consoles before the
-   first real call.
+   first real call — the configured values are in § 3.5.
+
+### 3.5 Spend controls (M3.1, 2026-09-15)
+
+Expected spend for this project is **$0.00**: 1,000 Enterprise-SKU calls per
+month are free and the project will not approach that. So these limits are not
+tuned to "stay affordable" — they are tuned so that **any** spend at all is a
+signal that something is broken.
+
+#### The console cannot do this (verified 2026-09-15)
+
+The original plan was to cap requests per day and per minute in the Google
+console. **That is not possible.** In the Places API (New) quota page every row,
+including `SearchTextRequest per day` and `SearchTextRequest per minute`, is
+marked not adjustable. The defaults are:
+
+| Quota | Default | Adjustable |
+| --- | --- | --- |
+| `SearchTextRequest per day` | 75,000 | No |
+| `SearchTextRequest per minute` | 600 | No |
+
+The deeper point, which is easy to miss: **a Maps Platform quota is not a
+spending limit.** It is an anti-abuse rate limit and is unrelated to billing.
+The free tier is 1,000 calls *per month*; the daily quota is 75,000 — roughly
+2,300× larger. Running inside quota for a single day would burn 75 months of
+free allowance. The quota page offers this project no protection whatsoever,
+and reading it as a budget control is a category error.
+
+#### What actually controls spend
+
+| Control | Value | Where | Failure mode it stops |
+| --- | --- | --- | --- |
+| Daily call cap | **30/day** | **In code** (M3.2) | Steady over-use, and a loop left running overnight |
+| Billing budget alert | **$1** | Console | A cap set on the wrong SKU or API |
+| API key restriction | Places API (New) only | Console | A leaked key spent on anything else |
+| Unused APIs disabled | — | Console | Spend surface that nothing is watching |
+
+**Why 30/day, and why it moved into code.** This is the load-bearing number:
+30 × 31 = 930 < 1,000, so the free tier becomes arithmetic rather than a hope,
+even if the project is touched every day of a long month. Thirty *distinct*
+queries a day is generous, because the 24-hour cache means re-running the same
+debug query costs nothing — it is a budget of new queries, not of page loads.
+
+Since Google will not enforce it, the cache layer does: a persisted per-day
+counter, checked before any network call, that refuses rather than requests once
+the day's budget is gone. This is strictly better than the console version would
+have been. It lives in the repository where it can be read and reviewed, it is
+covered by tests, and it fails closed with an error message written for this
+project rather than a generic 429.
+
+**Why a $1 budget alert.** The code cap protects the one call site that goes
+through the cache. It cannot see a second enabled API, a different SKU, or a
+field-mask change that silently re-prices calls to Enterprise + Atmosphere. A $1
+threshold against an expected $0.00 fires after roughly 14 paid calls — a
+tripwire, not a budget.
+
+Honest limit: **a Google budget alert notifies, it does not stop anything.** Hard
+enforcement needs a Pub/Sub topic wired to a function that disables billing,
+which is disproportionate here. The code cap is the actual stop; the alert is how
+you learn the cap was set on the wrong thing.
+
+**Why key restriction belongs in this list.** An unrestricted Google API key
+works from anywhere for anyone who has it. `.env` is gitignored, which handles
+the obvious leak, but a key scoped to one API means a leak costs at most this
+project's quota instead of everything billable in the account. Restricting the
+key is part of capping spend, not a separate security chore.
+
+### 3.6 Enabled APIs (audited and reduced 2026-09-15)
+
+Creating the Maps Platform project enabled thirteen APIs by default. This
+project calls exactly one. The other twelve were disabled on 2026-09-15;
+**Places API (New) is now the only API enabled on the project.**
+
+**Kept:** Places API (New) — Text Search only.
+
+**Disabled:** Places API (Legacy), Places Aggregate API, Places UI Kit,
+Geocoding API, Geolocation API, Directions API, Distance Matrix API, Routes API,
+Roads API, Route Optimization API, Time Zone API, Address Validation API.
+
+Be honest about the benefit: an enabled API that is never called costs nothing,
+so this saves $0 today. What it removes is *surface*. A leaked key or a wrong
+endpoint in a bug can only reach what is enabled, and Places API (Legacy) is the
+sharpest example — it is a different SKU at different prices reachable from a
+near-identical URL, so an accidental call there would bill in a way none of the
+reasoning in § 3.5 accounts for.
+
+Two of the disabled ones are worth naming because they sound required and are
+not: **Geolocation API** is not what supplies the user's location (the browser
+is — see § 3.3), and **Geocoding API** is not needed because the fallback
+location is appended to the query as text rather than converted to coordinates.
+
+Re-enabling any of these is one click if a later milestone needs it. Disabling
+is reversible and free, so the default is off.
 
 ---
 
@@ -281,9 +397,18 @@ with no network call and no API key. 16 tests pass.
 
 Replace the fixtures with live Places calls.
 
-- `search_places` with a timeout, error handling, and a 24-hour local cache.
+- **M3.1** Console hardening before the first real call. Unused APIs disabled ✅
+  (2026-09-15, only Places API (New) remains enabled). Still open: the $1 budget
+  alert and restricting the key to Places API (New). Per-day and per-minute
+  quotas are *not* adjustable — see § 3.5.
+- **M3.2** ✅ A 24-hour local cache keyed by query string, plus the 30/day call
+  cap the console cannot enforce — both in `cache.py`, wired into
+  `search_places`, 15 tests. Built before the network code, so every later
+  debugging run is free.
+- **M3.3** `_fetch_live` implemented with a timeout and error handling, and
+  `USE_LIVE_API` flipped to `True`. Signature and return shape are unchanged
+  from M2, so nothing downstream moves.
 - Field mask set to the M1 schema, accepting the Enterprise SKU.
-- Quota cap set in the Google console before the first call.
 - Browser geolocation: a hidden lat/lng field filled by vanilla JS, passed to
   Places as location bias, with a fallback location for denied or unavailable
   permission.
@@ -326,6 +451,5 @@ Exit: a prompt change can be shown to improve or hurt the score, with evidence.
 - **`place_type` usefulness.** In the schema since M1, extracted by
   `parse_places`, but still has no consumer — M2's rule-based ranker ignores it.
   Decide by M4 or drop it.
-- **Geolocation fallback value.** M3 needs one concrete fallback when the
-  browser refuses. "Allston, Boston" from M0 is the obvious placeholder; decide
-  whether it stays hardcoded or moves to `.env`.
+- **~~Geolocation fallback value.~~** Settled 2026-09-15: "Allston, Boston", as a
+  named constant in `find.py` rather than a `.env` variable. See § 3.3.

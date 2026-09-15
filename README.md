@@ -3,9 +3,10 @@
 Describe what you want to eat in one sentence. Get back one restaurant
 and one line explaining why.
 
-**Status:** M2 complete — the app runs end to end on fixtures, no API key
-and no network call. M3 (real Places data) is next. Milestones live in
-[docs/PROJECT.md](docs/PROJECT.md) § 4.
+**Status:** M3.2 complete — the app runs end to end on fixtures, no API key
+and no network call. The cache and the daily call cap that guard live calls
+are built and tested; `find.USE_LIVE_API` is still `False`. M3.3 (the real
+Places call) is next. Milestones live in [docs/PROJECT.md](docs/PROJECT.md) § 4.
 
 ## v1 scope
 
@@ -54,6 +55,21 @@ Tests:
 ```bash
 pytest
 ```
+
+## Spend guards
+
+Live Places calls are capped at **30 per day**, enforced in `cache.py`
+rather than in the Google console — Maps quotas are not adjustable and are
+rate limits, not spending limits ([docs/PROJECT.md](docs/PROJECT.md) § 3.5).
+Responses are cached for 24 hours, so re-running a debug query is free.
+
+The counter is plain JSON and safe to read:
+
+```bash
+cat .cache/budget.json
+```
+
+Deleting `.cache/` resets both the cache and the day's counter.
 
 ## Documents
 
