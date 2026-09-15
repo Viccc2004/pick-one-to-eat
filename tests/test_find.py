@@ -1,6 +1,16 @@
-"""parse_places: the schema and the missing-field rules from M1."""
+"""find.py: the M1 schema rules, and the guards around a live call."""
 
+import pytest
+
+import cache
+import find
 from find import parse_places, search_places
+
+RAW_LIVE = [{"displayName": {"text": "Sichuan Garden House"}, "rating": 4.6}]
+
+
+def _must_not_be_called(query):
+    raise AssertionError("_fetch_live was called when it should not have been")
 
 
 def test_complete_record_maps_every_field():
@@ -63,3 +73,60 @@ def test_fixtures_parse_and_drop_the_nameless_one():
 
     assert len(places) == 9
     assert all(p["name"] for p in places)
+
+
+# --- search_places: the guards around a live call -------------------------
+
+
+def test_fixture_reads_never_touch_the_budget():
+    for _ in range(cache.MAX_CALLS_PER_DAY * 2):
+        search_places("chinese food")
+
+    # Offline runs cost nothing, so counting them would exhaust the day's
+    # budget without a single request leaving the machine.
+    assert cache.calls_today() == 0
+
+
+def test_live_path_counts_the_call_and_stores_the_response(monkeypatch):
+    monkeypatch.setattr(find, "USE_LIVE_API", True)
+    monkeypatch.setattr(find, "_fetch_live", lambda q: RAW_LIVE)
+
+    assert search_places("chinese food") == RAW_LIVE
+    assert cache.calls_today() == 1
+    assert cache.get_cached("chinese food") == RAW_LIVE
+
+
+def test_a_cache_hit_makes_no_call_and_costs_no_budget(monkeypatch):
+    cache.store("chinese food", RAW_LIVE)
+
+    monkeypatch.setattr(find, "USE_LIVE_API", True)
+    monkeypatch.setattr(find, "_fetch_live", _must_not_be_called)
+
+    assert search_places("chinese food") == RAW_LIVE
+    assert cache.calls_today() == 0
+
+
+def test_an_exhausted_budget_stops_the_call_before_it_happens(monkeypatch):
+    for _ in range(cache.MAX_CALLS_PER_DAY):
+        cache.record_call()
+
+    monkeypatch.setattr(find, "USE_LIVE_API", True)
+    monkeypatch.setattr(find, "_fetch_live", _must_not_be_called)
+
+    with pytest.raises(cache.DailyBudgetExceeded):
+        search_places("chinese food")
+
+
+def test_a_failed_call_still_counts(monkeypatch):
+    def boom(query):
+        raise TimeoutError("Google did not answer")
+
+    monkeypatch.setattr(find, "USE_LIVE_API", True)
+    monkeypatch.setattr(find, "_fetch_live", boom)
+
+    with pytest.raises(TimeoutError):
+        search_places("chinese food")
+
+    # A request that times out may still have been served and billed, so
+    # the spend guard has to assume every attempt cost money.
+    assert cache.calls_today() == 1
