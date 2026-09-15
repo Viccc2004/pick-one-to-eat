@@ -93,11 +93,13 @@ def test_live_path_counts_the_call_and_stores_the_response(monkeypatch):
 
     assert search_places("chinese food") == RAW_LIVE
     assert cache.calls_today() == 1
-    assert cache.get_cached("chinese food") == RAW_LIVE
+    # Stored under the composed query, location included - see
+    # test_location_is_part_of_the_cache_key in test_places_api.py.
+    assert cache.get_cached(find._build_query("chinese food")) == RAW_LIVE
 
 
 def test_a_cache_hit_makes_no_call_and_costs_no_budget(monkeypatch):
-    cache.store("chinese food", RAW_LIVE)
+    cache.store(find._build_query("chinese food"), RAW_LIVE)
 
     monkeypatch.setattr(find, "USE_LIVE_API", True)
     monkeypatch.setattr(find, "_fetch_live", _must_not_be_called)

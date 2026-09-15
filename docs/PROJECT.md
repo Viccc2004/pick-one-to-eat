@@ -33,9 +33,11 @@ authority. Citations elsewhere in this document point here.
 Describe what you want to eat in one sentence. Get back one restaurant and one
 sentence explaining why it fits what you asked for.
 
-**Status as of 2026-09-15:** M0–M2 done, M3.2 done. The app runs end to end on
-fixtures with 31 passing tests; the spend guards are built but no live call has
-been made yet. M3.3 is next, and is the first step that spends money.
+**Status as of 2026-09-15:** M0–M2 done; M3.1 partly, M3.2 and M3.3 done. The
+app runs end to end on fixtures with 47 passing tests. The live Places call and
+both spend guards are written and tested against stubs, but `USE_LIVE_API` is
+still `False`, so nothing has cost anything yet. M3.4 — flipping that switch —
+is the first step that spends money.
 
 ### Shape (settled 2026-09-11, conversation row revised 2026-09-15)
 
@@ -405,13 +407,15 @@ Replace the fixtures with live Places calls.
   cap the console cannot enforce — both in `cache.py`, wired into
   `search_places`, 15 tests. Built before the network code, so every later
   debugging run is free.
-- **M3.3** `_fetch_live` implemented with a timeout and error handling, and
-  `USE_LIVE_API` flipped to `True`. Signature and return shape are unchanged
-  from M2, so nothing downstream moves.
-- Field mask set to the M1 schema, accepting the Enterprise SKU.
-- Browser geolocation: a hidden lat/lng field filled by vanilla JS, passed to
-  Places as location bias, with a fallback location for denied or unavailable
-  permission.
+- **M3.3** ✅ *code written, switch still off.* `_fetch_live` calls Text Search
+  with the M1 field mask, a 10-second timeout, and every failure funnelled into
+  one `PlacesUnavailable`. The web layer renders those as a sentence. 16 tests,
+  all against stubbed responses — no live call has happened.
+- **M3.4** Flip `USE_LIVE_API` to `True` and make the first real call. This is
+  the step that spends money; § 3.5's remaining console items should exist
+  first.
+- **M3.5** Browser geolocation: hidden lat/lng field, `locationBias` on the
+  request, fallback to the appended text location.
 - The incomplete-response path stays covered by the M2 fixtures.
 
 Exit: the same page, now backed by real restaurants near the user, with the API

@@ -384,3 +384,51 @@ key to Places API (New). Neither blocks M3.2 or writing M3.3, since no live
 call happens until `find.USE_LIVE_API` is flipped. Both should exist before
 that flip — the code cap in `cache.py` bounds a runaway loop, but nothing in
 the repository can bound a leaked key.
+
+## M3.3 — 2026-09-15
+
+The live Places call, written and tested but not yet switched on.
+
+### The field mask is a money control, and now has a test
+`FIELD_MASK` names exactly the six M1 schema fields. Google bills each
+call at the highest tier of any field requested, so the mask — not the
+query, not the result count — is what decides whether a call costs $32,
+$35, or $40 per thousand.
+
+Two tests hold it: one asserts the mask covers exactly the M1 schema and
+nothing more, the other asserts no Atmosphere-tier field (`reviews`,
+`editorialSummary`, `generativeSummary`) appears in it. The second is the
+one that matters. The SKU trap is invisible at the call site — adding one
+field to get "a bit more context for the LLM" re-prices every call with
+no error and no warning — so it is worth a test that fails loudly instead
+of a comment nobody reads.
+
+### Every failure becomes PlacesUnavailable
+Timeouts, connection errors, non-200 statuses, non-JSON bodies, and a
+missing API key all raise one exception type. Callers get one thing to
+catch, and the web layer turns it into a sentence plus the technical
+detail rather than a traceback. That is M3's exit condition.
+
+The missing-key case deliberately raises before any request is attempted,
+so a forgotten `.env` fails instantly and says exactly what to do.
+
+### No matches is an empty list, not a failure
+A Text Search with nothing to return comes back as `{}` with no `places`
+key at all — not as an empty list. Reading it naively would turn an
+ordinary "nothing found" into an error message. `body.get("places", [])`
+and a test pin this, because it is the kind of thing that only shows up
+in production against a weird query.
+
+### Location is part of the cache key
+`search_places` composes the full query — sentence plus location — before
+doing anything else, and that composed string is both the cache key and
+the text sent to Google. Keying on the bare sentence would let a result
+fetched for one neighbourhood be served to someone standing somewhere
+else, which is silent and wrong rather than loud and wrong.
+
+### The location is always appended, even when the user gave one
+"dumplings in Allston" becomes "dumplings in Allston, Boston". Text
+Search resolves the redundancy without complaint. Detecting that the user
+already named a location is constraint extraction — M4's job, and it
+needs an LLM. Doing it now with string matching would be exactly the
+regex approach already rejected for that work.

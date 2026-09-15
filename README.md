@@ -3,10 +3,10 @@
 Describe what you want to eat in one sentence. Get back one restaurant
 and one line explaining why.
 
-**Status:** M3.2 complete — the app runs end to end on fixtures, no API key
-and no network call. The cache and the daily call cap that guard live calls
-are built and tested; `find.USE_LIVE_API` is still `False`. M3.3 (the real
-Places call) is next. Milestones live in [docs/PROJECT.md](docs/PROJECT.md) § 4.
+**Status:** M3.3 complete — the live Places call, the 24-hour cache and the
+30/day spend cap are all written and tested, but `find.USE_LIVE_API` is still
+`False`, so the app runs on fixtures and has never cost anything. Flipping that
+switch is M3.4. Milestones live in [docs/PROJECT.md](docs/PROJECT.md) § 4.
 
 ## v1 scope
 

@@ -32,6 +32,14 @@
         color: #fff;
         cursor: pointer;
       }
+      .error {
+        border: 1px solid #d9534f;
+        border-radius: 6px;
+        padding: 0.75rem 1rem;
+        background: #fdf3f2;
+      }
+      .error p { margin: 0.25rem 0; }
+      .detail { color: #777; font-size: 0.85rem; word-break: break-word; }
       .card {
         border: 1px solid #e2e2e2;
         border-radius: 10px;
@@ -66,7 +74,12 @@
       <button type="submit">Pick one</button>
     </form>
 
-    {% if place %}
+    {% if error %}
+      <div class="error">
+        <p><strong>{{ error }}</strong></p>
+        {% if detail %}<p class="detail">{{ detail }}</p>{% endif %}
+      </div>
+    {% elif place %}
       <div class="card">
         <h2>{{ place.name }}</h2>
         <p>{{ reason }}</p>
@@ -81,8 +94,14 @@
     {% endif %}
 
     <p class="stub">
-      M2: results come from hand-written fixtures, not the live Places API.
-      Ranking and reasoning are placeholder rules, not an LLM.
+      {% if live %}
+        Results come from the live Places API, capped at 30 calls a day and
+        cached for 24 hours.
+      {% else %}
+        Results come from hand-written fixtures, not the live Places API. No
+        API key, no network call, no cost.
+      {% endif %}
+      Ranking and reasoning are placeholder rules, not an LLM - that is M4.
     </p>
   </body>
 </html>
