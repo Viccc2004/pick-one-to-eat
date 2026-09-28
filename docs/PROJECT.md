@@ -33,7 +33,7 @@ authority. Citations elsewhere in this document point here.
 Describe what you want to eat in one sentence. Get back one restaurant and one
 sentence explaining why it fits what you asked for.
 
-**Status as of 2026-09-15:** M0–M2 done; M3.1 partly, M3.2 and M3.3 done. The
+**Status as of 2026-09-27:** M0–M2 done; M3.1, M3.2 and M3.3 done. The
 app runs end to end on fixtures with 47 passing tests. The live Places call and
 both spend guards are written and tested against stubs, but `USE_LIVE_API` is
 still `False`, so nothing has cost anything yet. M3.4 — flipping that switch —
@@ -319,11 +319,51 @@ enforcement needs a Pub/Sub topic wired to a function that disables billing,
 which is disproportionate here. The code cap is the actual stop; the alert is how
 you learn the cap was set on the wrong thing.
 
+Possibly outdated as of 2026-09-27: the Budgets page now describes budgets
+"with a spending cap" that pause services when exceeded, and shows a
+spending-cap status column. Not yet checked whether that applies to Maps
+Platform or how quickly it acts. Billing data can lag by up to 24 hours, so
+even if it does apply, it would not stop an overnight loop — the code cap stays.
+
 **Why key restriction belongs in this list.** An unrestricted Google API key
 works from anywhere for anyone who has it. `.env` is gitignored, which handles
 the obvious leak, but a key scoped to one API means a leak costs at most this
 project's quota instead of everything billable in the account. Restricting the
 key is part of capping spend, not a separate security chore.
+
+#### Console layout (verified 2026-09-27)
+
+| Thing | Where |
+| --- | --- |
+| Project | ID `project-b7528a40-29b3-43df-b82`, number `799675244900`, under the organization `xutianyu2004-org` |
+| Billing account | Under "No organization" — a label, not an organization |
+| Budget alert | $1/month on the billing account, thresholds 50/90/100/150% |
+| API key | The only key in the project, restricted to Places API (New), no application restriction |
+
+A project is *linked* to a billing account, not contained by it, so the two
+sitting in different places is normal. The budget is scoped to the billing
+account and therefore covers the project regardless of its organization.
+
+Application restriction is deliberately **None**. Calls are made server-side
+from Python with the key in the `X-Goog-Api-Key` header, which carries no
+referrer, so a website restriction would block the app itself; an IP
+restriction would break whenever the home IP changes. The API restriction plus
+a gitignored `.env` is the protection.
+
+Two things learned finding the key, worth knowing next time:
+
+- **The key was not in the project first inspected.** Keys belong to a
+  project, and an empty Credentials page usually means the wrong project is
+  selected, not that the key is gone. A key's project can be found for free by
+  sending it to an API it cannot use: the error carries
+  `"consumer": "projects/<number>"`.
+- **The error reason says which layer refused.** `API_KEY_SERVICE_BLOCKED`
+  means the key's own restriction list refused the call; `SERVICE_DISABLED`
+  means the key allowed it but the project has the API off; `API key not
+  valid` means the key was deleted. Legacy Maps endpoints such as Geocoding
+  only read the key from a `?key=` URL parameter and ignore the header, so a
+  header-only test against them reports "must use an API key" and proves
+  nothing.
 
 ### 3.6 Enabled APIs (audited and reduced 2026-09-15)
 
@@ -399,10 +439,11 @@ with no network call and no API key. 16 tests pass.
 
 Replace the fixtures with live Places calls.
 
-- **M3.1** Console hardening before the first real call. Unused APIs disabled ✅
-  (2026-09-15, only Places API (New) remains enabled). Still open: the $1 budget
-  alert and restricting the key to Places API (New). Per-day and per-minute
-  quotas are *not* adjustable — see § 3.5.
+- **M3.1** ✅ Console hardening before the first real call. Unused APIs
+  disabled (2026-09-15, only Places API (New) remains enabled); a $1 monthly
+  budget alert on the billing account; the key restricted to Places API (New)
+  and verified by a refused Geocoding request (2026-09-27). Per-day and
+  per-minute quotas are *not* adjustable — see § 3.5.
 - **M3.2** ✅ A 24-hour local cache keyed by query string, plus the 30/day call
   cap the console cannot enforce — both in `cache.py`, wired into
   `search_places`, 15 tests. Built before the network code, so every later
