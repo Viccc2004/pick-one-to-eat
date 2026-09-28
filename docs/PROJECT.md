@@ -33,11 +33,10 @@ authority. Citations elsewhere in this document point here.
 Describe what you want to eat in one sentence. Get back one restaurant and one
 sentence explaining why it fits what you asked for.
 
-**Status as of 2026-09-27:** M0–M2 done; M3.1, M3.2 and M3.3 done. The
-app runs end to end on fixtures with 47 passing tests. The live Places call and
-both spend guards are written and tested against stubs, but `USE_LIVE_API` is
-still `False`, so nothing has cost anything yet. M3.4 — flipping that switch —
-is the first step that spends money.
+**Status as of 2026-09-27:** M0–M2 done; M3.1–M3.4 done. The app answers
+from the live Places API, behind the 24-hour cache and the 30/day cap. 47
+passing tests, none of which touch the network. Next: M3.5, browser
+geolocation.
 
 ### Shape (settled 2026-09-11, conversation row revised 2026-09-15)
 
@@ -452,9 +451,13 @@ Replace the fixtures with live Places calls.
   with the M1 field mask, a 10-second timeout, and every failure funnelled into
   one `PlacesUnavailable`. The web layer renders those as a sentence. 16 tests,
   all against stubbed responses — no live call has happened.
-- **M3.4** Flip `USE_LIVE_API` to `True` and make the first real call. This is
-  the step that spends money; § 3.5's remaining console items should exist
-  first.
+- **M3.4** ✅ `USE_LIVE_API` flipped to `True`; first real call made
+  2026-09-27. One query returned 8 real places carrying exactly the six
+  field-mask fields; repeating it and paging to rank 2 were cache hits, and
+  the day's counter stayed at 1. Tests are pinned to fixtures in
+  `conftest.py`, so the suite can never spend. Still to confirm a day later:
+  the Billing report shows the call under the Text Search Enterprise SKU at
+  $0.
 - **M3.5** Browser geolocation: hidden lat/lng field, `locationBias` on the
   request, fallback to the appended text location.
 - The incomplete-response path stays covered by the M2 fixtures.
@@ -498,3 +501,8 @@ Exit: a prompt change can be shown to improve or hurt the score, with evidence.
   Decide by M4 or drop it.
 - **~~Geolocation fallback value.~~** Settled 2026-09-15: "Allston, Boston", as a
   named constant in `find.py` rather than a `.env` variable. See § 3.3.
+- **Closed places ranked first.** The first live query, run at 22:30,
+  recommended a restaurant that was closed — and so was rank 2. The M2 ranker
+  sorts on rating alone and ignores `open_now`, which the fixtures never made
+  visible. Either a one-line rule change now or part of M4's constraint
+  handling; decide before M4 starts.

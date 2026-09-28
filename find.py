@@ -42,9 +42,10 @@ MAX_RESULTS = 10
 
 REQUEST_TIMEOUT_SECONDS = 10
 
-# Flipped to True in M3.3, once _fetch_live exists. Until then the whole
-# app runs on fixtures with no API key, no network, and no cost.
-USE_LIVE_API = False
+# Live since M3.4. Every call still passes the 24-hour cache and the
+# 30/day cap in cache.py first. Set to False to run on fixtures with no
+# key, no network, and no cost. Tests pin it to False in conftest.py.
+USE_LIVE_API = True
 
 # Where the query goes when the browser will not say where the user is.
 # Appended to the query text rather than geocoded into coordinates: that

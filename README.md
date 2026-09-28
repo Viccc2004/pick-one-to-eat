@@ -3,11 +3,13 @@
 Describe what you want to eat in one sentence. Get back one restaurant
 and one line explaining why.
 
-**Status:** M3.1–M3.3 complete — the Google console is hardened, and the live
-Places call, the 24-hour cache and the 30/day spend cap are all written and
-tested, but `find.USE_LIVE_API` is still
-`False`, so the app runs on fixtures and has never cost anything. Flipping that
-switch is M3.4. Milestones live in [docs/PROJECT.md](docs/PROJECT.md) § 4.
+**Status:** M3.4 done — the app now answers from the live Google Places
+API, behind a 24-hour cache and a 30/day call cap. First real call made
+2026-09-27. Next is M3.5, browser geolocation. Milestones live in
+[docs/PROJECT.md](docs/PROJECT.md) § 4.
+
+Set `find.USE_LIVE_API = False` to run on fixtures with no key and no
+cost. Tests always run on fixtures and never reach the network.
 
 ## v1 scope
 

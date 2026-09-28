@@ -432,3 +432,31 @@ Search resolves the redundancy without complaint. Detecting that the user
 already named a location is constraint extraction — M4's job, and it
 needs an LLM. Doing it now with string matching would be exactly the
 regex approach already rejected for that work.
+
+## M3.4 — 2026-09-27
+
+The switch is on. First real call made.
+
+### Tests are pinned to fixtures, whatever the switch says
+With `USE_LIVE_API = True` and a real key in `.env` (loaded by
+`find.py` on import), every plain fixture test — the ones that never set
+the flag because `False` used to be the default — would have made a
+billed call. `conftest.py` now pins the flag to `False` for every test
+and replaces `requests.post` with one that fails the test. Live-path
+tests turn the flag back on and stub the network themselves, as they
+already did. A test that forgets fails loudly instead of spending.
+
+This had to land in the same change as the flip. Flipping first and
+fixing tests second would have made the first `pytest` run the first
+real calls — up to one per fixture test.
+
+### What the first call showed
+`cheap chinese food` → `cheap chinese food in allston, boston`: 8 places
+back, each carrying exactly the six field-mask fields and nothing else,
+which is the mask doing its job. Re-running the query and following
+"show me another" were both cache hits; the counter stayed at 1.
+
+The recommendation was a closed restaurant, and so was the runner-up.
+Nothing is broken — the M2 ranker was never asked to care, and the
+fixtures happened not to show it. Recorded as an open question in
+PROJECT.md § 5 rather than fixed here, to keep this change to the flip.
