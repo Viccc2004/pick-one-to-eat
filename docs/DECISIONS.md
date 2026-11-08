@@ -940,3 +940,69 @@ primary depends on its free-tier daily limit, not yet read from AI Studio.
 Known: "下周五" (Friday next week) is read as the next Friday. The hours
 check is per weekday, so the answer is the same, and the page names the
 weekday rather than a date, so it does not mislead.
+
+## M4.6 — 2026-11-08
+
+The LLM ranks and explains: `pick.py`. `recommend.py` stays, as the
+fallback.
+
+### One call ranks and writes all three reasons
+The candidates that survive the hours check (at most 10) go to Gemini
+with the user's own words and the time they want to eat. It returns up
+to three picks, best first, each with a two-or-three-sentence
+recommendation in the user's language. Writing all three in one call
+means "show me another" pages through reasons that already exist —
+verified live, ranks 2 and 3 cost 0.0s and no calls.
+
+Each place is described to the model as a single line of the facts we
+actually hold — name, type, rating and count, price label, open at the
+requested time yes/unknown — and nothing else. A closed place is never
+offered, so it can never be recommended.
+
+### The code checks every number in a recommendation
+The rule "cite only supported conditions" cannot be checked in general,
+but numbers can, and numbers are what a model most often invents. Every
+number in a recommendation must be the place's rating, its review count,
+the requested time (including its 12-hour form, so "晚上7点" passes for
+19:00), or the 50-review threshold the prompt itself mentions. One
+unsupported number and the model's sentence is replaced by the template
+sentence — dropped, not edited. Thousands separators are ignored. The
+check is language-independent: "4.8分" and "4.8 stars" are the same test.
+
+Also checked: ids must be real, unique, non-boolean integers; a reason
+over 600 characters or empty gets the template.
+
+Live run, nine recommendations across Chinese and English: the guard
+rejected none. That is a reading for M5, not a proof.
+
+### Failure degrades to the rules, and the page says so
+If the ranking call fails — Gemini down, budget spent, counter
+unreadable — or returns no usable pick, `recommend.rank_places` and
+`build_reason` answer instead, with "Gemini couldn't rank these just
+now, so they are ordered by rating and the reason is a plain summary."
+Extraction failing still stops the request (there is nothing to search
+for); ranking failing never does (there is something to show).
+
+### Three picks whenever there are three candidates
+First live run: "cheap ramen in Allston" came back with one pick and no
+"show me another". "Up to three" in the prompt read as permission to
+stop early, so it now says exactly three, or all of them if fewer.
+
+### Price words stay out of the search phrase
+The same query showed the deeper cause: Google itself returned one place
+for "cheap ramen in Allston" against two for "ramen in Allston". A price
+word in the text narrows Google's match. Extraction already puts price
+in its own field and the ranking prompt sees the user's words, so the
+search phrase no longer carries it. Supersedes the "cheap dumplings"
+example in § M4.2. After the change: two picks, and the second one's
+reason said it was "mid-priced rather than cheap" — the honest answer.
+
+### Seen, left for M5
+- Reasons are accurate but formulaic: "X is a mid-priced japanese
+  restaurant that is open tomorrow at 19:00. It has a rating of …". The
+  facts allow little more; whether a better prompt helps is the first
+  thing M5's eval should measure.
+- The first, uncached request of a recommendation took 8–18s on some
+  runs, because the primary model was slow or failing before the
+  fallback answered. Making `gemini-3.5-flash-lite` the primary is the
+  likely fix, pending its free-tier limit.

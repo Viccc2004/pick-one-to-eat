@@ -36,11 +36,12 @@ sentence explaining why it fits what you asked for.
 **Status as of 2026-11-08:** M0–M2 done; M3.1–M3.4 done. The app answers
 from the live Places API, behind the 24-hour cache and the 30/day cap. 47
 passing tests, none of which touch the network. M3.5 (geolocation) folded
-into M4. M4.0–M4.5 done: the page reads the user's words through Gemini, asks up to
+into M4. M4.0–M4.6 done: the page reads the user's words through Gemini, asks up to
 two follow-up questions, searches the place they named or near the browser's
-position, drops places closed at the requested time, and shows the address
-with a Google Maps link. 146 passing tests. Next: M4.6, LLM ranking and a
-recommendation in the user's language.
+position, drops places closed at the requested time, and has Gemini pick
+three and explain each in the user's language, with every number checked
+against the data. Address and Google Maps link on the card. 177 passing
+tests. Next: M4.7, the on-page usage rules, then the M4 exit check.
 
 ### Shape (settled 2026-09-11, conversation and location rows revised 2026-11-08)
 
@@ -500,9 +501,11 @@ include clarifying questions and location handling — see DECISIONS.md § M4.0.
   computes open-at-time in the place's local time; closed places are dropped;
   the Places cache key carries a field-mask fingerprint so old-shape entries
   are never served.
-- **M4.6** LLM ranks the surviving candidates to a top-3 and writes a short
+- **M4.6** ✅ LLM ranks the surviving candidates to a top-3 and writes a short
   recommendation — a few sentences, not one — **in the language the user wrote
-  in**, citing only supported conditions.
+  in**, citing only supported conditions. Done in `pick.py`: one call for all
+  three; every number in a reason must be one of the place's facts or the
+  template replaces it; a failed call falls back to the rules and says so.
 - **M4.7** The page states the rules the user is working with, next to the
   input, for reference: naming a place helps (otherwise the current location
   is used); saying when you plan to eat helps (otherwise now is assumed); the

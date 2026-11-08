@@ -78,9 +78,11 @@ Never fill a gap with a guess; the only exception is the meal-time rule.
 
 Fields:
 - search_text: a short restaurant search phrase: the food, cuisine or kind \
-of place, plus any qualities they asked for ("cheap dumplings", "quiet ramen \
-bar"). Never include a location or a time. If they named no food or kind of \
-place at all, use "restaurant". Always in English: translate if they wrote \
+of place, plus any qualities they asked for ("dumplings", "quiet ramen \
+bar"). Never include a location, a time, or anything about price - price \
+goes in its own field, and price words in the search phrase make Google \
+return fewer places. If they named no food or kind of place at all, use \
+"restaurant". Always in English: translate if they wrote \
 in another language ("火锅" becomes "hot pot").
 - location: the place where they will eat, if they named one ("Boston", \
 "Back Bay", "near Fenway Park"). If they say where they are now but will eat \

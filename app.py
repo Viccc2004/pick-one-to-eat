@@ -10,10 +10,10 @@ from fastapi.templating import Jinja2Templates
 import extract
 import find
 import hours
+import pick
 from cache import BudgetUnreadable, DailyBudgetExceeded
 from find import PlacesUnavailable, parse_places, search_places
 from llm import LLMUnavailable
-from recommend import build_reason, rank_places
 
 app = FastAPI()
 
@@ -122,6 +122,7 @@ def home(
         "detail": None,
         "searched": False,
         "all_closed": False,
+        "fallback_note": None,
         "live": find.USE_LIVE_API,
     }
 
@@ -171,10 +172,10 @@ def home(
         return render()
 
     # Open-ness is worked out now, for the time the user asked about, not
-    # read from the cache. Closed places are dropped by rank_places.
+    # read from the cache. Closed places never reach the ranking.
     hours.annotate(places, understood.when, understood.day, understood.time)
     when_label = hours.describe_when(understood.when, understood.day, understood.time)
-    candidates = rank_places(places)
+    candidates, context["fallback_note"] = pick.choose(turns, when_label, places)
     context["all_closed"] = bool(places) and not candidates
     context["when_label"] = when_label
 
@@ -184,11 +185,12 @@ def home(
 
         context["rank"] = rank
         context["place"] = place
-        context["reason"] = build_reason(place, when_label)
+        context["reason"] = place["reason"]
 
         if rank + 1 < len(candidates):
             # Same conversation, next candidate. Re-reading it is a cache
-            # hit for both Gemini and Places, so paging costs no call.
+            # hit for both Gemini calls and for Places, so paging costs no
+            # call: the ranking call already wrote all three reasons.
             params = [("t", text) for text in t] + [("q", q), ("rank", rank + 1)]
             if coords is not None:
                 params += [("lat", coords[0]), ("lng", coords[1])]

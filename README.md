@@ -3,14 +3,14 @@
 Describe what you want to eat in one sentence. Get back one restaurant
 and one line explaining why.
 
-**Status:** M4.5 done — the page reads your sentence through Gemini
+**Status:** M4.6 done — the page reads your sentence through Gemini
 (free tier), asks up to two follow-up questions if where or when is
 missing, then searches the live Google Places API — at the place you
 named, or near your browser's location if you named none. Places closed
-at the time you want to eat are dropped, and the result shows the
-address and a Google Maps link. Ranking and the reason are still
-placeholder rules. Next is M4.6: an LLM-written recommendation in your
-own language. Milestones live in [docs/PROJECT.md](docs/PROJECT.md) § 4.
+at the time you want to eat are dropped; Gemini picks three and writes
+a short recommendation for each in your language, citing only the facts
+Google returned. The card shows the address and a Google Maps link.
+Next is M4.7, putting the usage rules on the page. Milestones live in [docs/PROJECT.md](docs/PROJECT.md) § 4.
 
 Set `find.USE_LIVE_API = False` to run on fixtures with no key and no
 cost. Tests always run on fixtures and never reach the network.

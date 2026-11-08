@@ -48,6 +48,7 @@
       }
       .card h2 { margin: 0 0 0.4rem; font-size: 1.2rem; }
       .card p { margin: 0; color: #333; }
+      .card .reason { line-height: 1.6; }
       .card .address { color: #666; font-size: 0.9rem; margin: 0 0 0.6rem; }
       .card .maps { display: inline-block; margin-top: 0.75rem; font-size: 0.9rem; }
       .more { display: inline-block; margin-top: 1rem; font-size: 0.9rem; }
@@ -140,7 +141,8 @@
       <div class="card">
         <h2>{{ place.name }}</h2>
         {% if place.address %}<p class="address">{{ place.address }}</p>{% endif %}
-        <p>{{ reason }}</p>
+        <p class="reason">{{ reason }}</p>
+        {% if fallback_note %}<p class="assumption">{{ fallback_note }}</p>{% endif %}
         {% for note in assumptions %}<p class="assumption">{{ note }}</p>{% endfor %}
         {% if place.maps_url %}
           <a class="maps" href="{{ place.maps_url }}" target="_blank" rel="noopener noreferrer"
@@ -169,8 +171,8 @@
         Results come from hand-written fixtures, not the live Places API. No
         API key, no network call, no cost.
       {% endif %}
-      Your words are read by Gemini; ranking and the reason are still
-      placeholder rules, not an LLM - that is M4.6.
+      Gemini reads your words, picks the place and writes the reason, using
+      only the facts Google returned.
     </p>
   </body>
 </html>

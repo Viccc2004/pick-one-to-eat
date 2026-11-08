@@ -13,6 +13,7 @@ import cache
 import extract
 import find
 import llm
+import pick
 from app import app
 
 client = TestClient(app)
@@ -41,16 +42,29 @@ def understood(**fields):
 
 @pytest.fixture(autouse=True)
 def gemini(monkeypatch):
-    """Every request in this file reads the user's words through this stub."""
+    """Both Gemini calls in a request go through this stub.
+
+    `reply` answers the extraction call, `rank_reply` the ranking call. The
+    ranking stub fails by default, so tests that are not about ranking get
+    the rule-based fallback - deterministic, and already covered by
+    test_recommend.py.
+    """
 
     def fake(prompt, schema, system=None):
-        fake.prompts.append(prompt)
-        if isinstance(fake.reply, Exception):
-            raise fake.reply
-        return fake.reply
+        if schema is pick.SCHEMA:
+            fake.rank_prompts.append(prompt)
+            reply = fake.rank_reply
+        else:
+            fake.prompts.append(prompt)
+            reply = fake.reply
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
 
     fake.reply = understood()
+    fake.rank_reply = llm.LLMUnavailable("ranking not stubbed in this test")
     fake.prompts = []
+    fake.rank_prompts = []
     monkeypatch.setattr(extract.llm, "generate_json", fake)
     return fake
 
@@ -181,6 +195,55 @@ def test_everything_closed_says_so(gemini, monkeypatch):
     response = client.get("/", params={"q": "chinese now"})
 
     assert "Everything found is closed right now" in response.text
+
+
+# --- the LLM picks and explains (M4.6) -------------------------------------------
+
+
+def test_the_llm_pick_and_its_reason_are_shown(gemini):
+    gemini.rank_reply = {"picks": [
+        {"id": 2, "reason": "Sichuan Garden House 有 4.6 分、1503 条评价，现在营业。"},
+        {"id": 1, "reason": "Golden Wok 4.4 分，价格便宜。"},
+    ]}
+
+    response = client.get("/", params={"q": "想吃川菜"})
+
+    assert "Sichuan Garden House" in response.text
+    assert "有 4.6 分、1503 条评价，现在营业。" in response.text
+    assert pick.FALLBACK_NOTE not in response.text
+
+
+def test_show_me_another_uses_the_llms_second_pick_and_its_reason(gemini):
+    gemini.rank_reply = {"picks": [
+        {"id": 2, "reason": "First choice."},
+        {"id": 1, "reason": "Second choice, 4.4 stars."},
+    ]}
+
+    response = client.get("/", params={"q": "chinese", "rank": 1})
+
+    assert "Golden Wok Allston" in response.text
+    assert "Second choice, 4.4 stars." in response.text
+
+
+def test_closed_places_never_reach_the_llm(gemini):
+    gemini.rank_reply = {"picks": [{"id": 1, "reason": "Fine."}]}
+
+    client.get("/", params={"q": "chinese now"})
+
+    # Wednesday 12:30: the two dinner-only places and the late-night one
+    # are closed, so the model is never offered them.
+    prompt = gemini.rank_prompts[-1]
+    assert "Harvard Ave Hot Pot" not in prompt
+    assert "Allston Late Night Kitchen" not in prompt
+    assert "Sichuan Garden House" in prompt
+
+
+def test_gemini_down_at_ranking_still_gives_an_answer_and_says_so(gemini):
+    # rank_reply fails by default
+    response = client.get("/", params={"q": "chinese now"})
+
+    assert "Corner Dumpling Counter" in response.text
+    assert "ordered by rating" in response.text
 
 
 # --- the clarifying loop --------------------------------------------------------
