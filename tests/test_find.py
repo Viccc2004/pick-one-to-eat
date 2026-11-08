@@ -132,3 +132,16 @@ def test_a_failed_call_still_counts(monkeypatch):
     # A request that times out may still have been served and billed, so
     # the spend guard has to assume every attempt cost money.
     assert cache.calls_today() == 1
+
+
+def test_missing_key_fails_before_spending_budget(monkeypatch):
+    monkeypatch.delenv("GOOGLE_PLACES_API_KEY")
+    monkeypatch.setattr(find, "USE_LIVE_API", True)
+    monkeypatch.setattr(find, "_fetch_live", _must_not_be_called)
+
+    with pytest.raises(find.PlacesUnavailable, match="GOOGLE_PLACES_API_KEY"):
+        search_places("chinese food")
+
+    # Nothing could have left the machine, so nothing may be counted -
+    # otherwise a half-filled .env quietly eats the day's 30 calls.
+    assert cache.calls_today() == 0

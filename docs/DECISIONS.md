@@ -640,3 +640,15 @@ handle, right on a first try with a one-line system prompt.
 Budget used on 2026-11-08: 2 counted calls (the timeout and the success),
 plus 3 diagnostic calls made outside `llm.py` that count against Google's
 500/day but not the app's counter.
+
+### Follow-up 2026-11-08: find.py checks the key first too
+Supersedes the "`find.py` is left as it is" paragraph above. `search_places`
+now checks `GOOGLE_PLACES_API_KEY` before the budget, so a missing key
+fails without counting a call, matching `llm.py`.
+
+Doing it exposed a hidden dependency: the live-path tests had been
+passing only because `find.py` loads the real key from `.env` on import.
+On a machine without `.env` they would have failed. `conftest.py` now
+sets fake values for both keys in every test, so no test ever holds a
+real key and the suite passes with no `.env` present (verified by running
+it from a copy of the repository without one).

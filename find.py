@@ -64,18 +64,23 @@ def _fetch_fixtures() -> list[dict]:
         return json.load(f)["places"]
 
 
-def _fetch_live(query: str) -> list[dict]:
-    """Call Places Text Search and return its raw items.
-
-    Every failure becomes PlacesUnavailable, so callers have one thing to
-    catch and the web layer can show a sentence instead of a traceback.
-    """
+def _api_key() -> str:
     api_key = os.environ.get("GOOGLE_PLACES_API_KEY")
     if not api_key:
         raise PlacesUnavailable(
             "GOOGLE_PLACES_API_KEY is not set. Copy .env.example to .env "
             "and fill it in."
         )
+    return api_key
+
+
+def _fetch_live(query: str) -> list[dict]:
+    """Call Places Text Search and return its raw items.
+
+    Every failure becomes PlacesUnavailable, so callers have one thing to
+    catch and the web layer can show a sentence instead of a traceback.
+    """
+    api_key = _api_key()
 
     try:
         response = requests.post(
@@ -125,9 +130,12 @@ def search_places(query: str, location: str | None = None) -> list[dict]:
     would exhaust the daily budget without a single call leaving the
     machine, which would make the cap look broken rather than useful.
 
-    On the live path the order is deliberate: check the budget, count the
-    call, then make it. Counting first is the conservative choice, because
-    a request that times out may still have been served and billed.
+    On the live path the order is deliberate: check the key, check the
+    budget, count the call, then make it. The key comes first so a missing
+    .env entry fails without spending budget - nothing can leave the
+    machine without it. Counting before calling is the conservative
+    choice, because a request that times out may still have been served
+    and billed.
     """
     if not USE_LIVE_API:
         return _fetch_fixtures()
@@ -141,6 +149,7 @@ def search_places(query: str, location: str | None = None) -> list[dict]:
     if cached is not None:
         return cached
 
+    _api_key()
     cache.check_daily_budget()
     cache.record_call()
     raw = _fetch_live(full_query)

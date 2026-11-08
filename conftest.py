@@ -36,3 +36,15 @@ def fixtures_not_google(monkeypatch):
     """
     monkeypatch.setattr(find, "USE_LIVE_API", False)
     monkeypatch.setattr(find.requests, "post", _no_network)
+
+
+@pytest.fixture(autouse=True)
+def fake_api_keys(monkeypatch):
+    """Replace the real keys that find.py and llm.py load from .env.
+
+    Without this, whether a live-path test passes would depend on whether
+    the machine running it has a .env, and every test would hold a real
+    key. Tests of a missing key delete these themselves.
+    """
+    monkeypatch.setenv("GOOGLE_PLACES_API_KEY", "test-places-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-gemini-key")
