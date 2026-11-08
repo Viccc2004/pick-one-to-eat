@@ -589,3 +589,54 @@ Two findings force a schema change:
   a 19:00 fetch. Computing open-ness from hours at request time fixes this
   as a side effect. How the place's local time zone is obtained (and which
   SKU that field sits in) is open until M4.5.
+
+## M4.1 — 2026-11-08
+
+The Gemini client, `llm.py`. One function, `generate_json(prompt, schema,
+system)`, that knows nothing about restaurants.
+
+### cache.py serves both APIs, one file and one cap per API
+`cache.py` takes an `api` argument (`"places"` by default, `"gemini"` for
+the LLM), and each API gets its own response file, counter file, and cap:
+30/day for Places, 400/day for Gemini. Separate counters mean an
+afternoon of prompt debugging cannot use up the day's Places calls.
+
+The Places files were renamed from `responses.json` / `budget.json` to
+`places_responses.json` / `places_budget.json` so both APIs follow one
+pattern. The old files are orphaned and harmless; the September counter
+in them had expired anyway.
+
+### The key is checked before the call is counted
+In `find.py` a missing `GOOGLE_PLACES_API_KEY` is discovered after
+`record_call`, so a misconfigured `.env` spends one unit of budget per
+attempt. `llm.py` checks the key first. `find.py` is left as it is — the
+cost is one count per failure, and the fix belongs in a change about
+`find.py`.
+
+### Only a valid answer is cached
+Malformed JSON, a non-object, a blocked prompt, or a `MAX_TOKENS` cut-off
+all raise `LLMUnavailable` before `cache.store`. Caching a broken answer
+would serve it back for 24 hours. The call is still counted, as with
+Places: it was made.
+
+### Timeout 30 seconds, thinking left at the default
+The first real call timed out at the original 20s. Measured on the same
+structured request: 0.8s with default thinking, 16.9s with
+`thinkingLevel: minimal` — so the slowness is free-tier variance on
+Google's side, not the model thinking, and turning thinking down buys
+nothing. Timeout raised to 30s.
+
+This matters for M4.3: one recommendation can take up to four calls in a
+row, so worst-case latency is tens of seconds. The cache makes repeats
+free; first-time latency is a known cost to watch, not yet a problem.
+
+### What the first call showed
+`responseJsonSchema` is accepted by `gemini-3.1-flash-lite` on v1beta, and
+the answer came back schema-shaped. "I'm in LA right now but flying to
+Boston tomorrow, want cheap dumplings for dinner there" was extracted as
+`location: "Boston"`, `when: "later"` — the LA-vs-Boston case M4.2 has to
+handle, right on a first try with a one-line system prompt.
+
+Budget used on 2026-11-08: 2 counted calls (the timeout and the success),
+plus 3 diagnostic calls made outside `llm.py` that count against Google's
+500/day but not the app's counter.

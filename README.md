@@ -3,10 +3,11 @@
 Describe what you want to eat in one sentence. Get back one restaurant
 and one line explaining why.
 
-**Status:** M4.0 done — the LLM layer is scoped and the Gemini key is
-in place; no LLM code yet. The app answers from the live Google Places
-API, behind a 24-hour cache and a 30/day call cap. Next is M4.1, the
-Gemini client. Milestones live in [docs/PROJECT.md](docs/PROJECT.md) § 4.
+**Status:** M4.1 done — `llm.py` calls Gemini (free tier) and gets back
+schema-shaped JSON, behind its own cache and a 400/day cap; the page does
+not use it yet. The app answers from the live Google Places API, behind
+a 24-hour cache and a 30/day call cap. Next is M4.2, extracting what,
+where, and when from the sentence. Milestones live in [docs/PROJECT.md](docs/PROJECT.md) § 4.
 
 Set `find.USE_LIVE_API = False` to run on fixtures with no key and no
 cost. Tests always run on fixtures and never reach the network.
@@ -78,10 +79,13 @@ Responses are cached for 24 hours, so re-running a debug query is free.
 The counter is plain JSON and safe to read:
 
 ```bash
-cat .cache/budget.json
+cat .cache/places_budget.json
+cat .cache/gemini_budget.json
 ```
 
-Deleting `.cache/` resets both the cache and the day's counter.
+Gemini calls have their own cache and their own cap (400/day, under the
+free tier's 500), in the same files with a `gemini_` prefix. Deleting
+`.cache/` resets every cache and every counter.
 
 ## Documents
 

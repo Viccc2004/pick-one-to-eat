@@ -36,8 +36,8 @@ sentence explaining why it fits what you asked for.
 **Status as of 2026-11-08:** M0–M2 done; M3.1–M3.4 done. The app answers
 from the live Places API, behind the 24-hour cache and the 30/day cap. 47
 passing tests, none of which touch the network. M3.5 (geolocation) folded
-into M4. M4.0 (scope and provider decisions) done; next: M4.1, the Gemini
-client.
+into M4. M4.0 (scope and provider decisions) and M4.1 (the Gemini client) done;
+66 passing tests. Next: M4.2, extraction.
 
 ### Shape (settled 2026-09-11, conversation and location rows revised 2026-11-08)
 
@@ -471,9 +471,11 @@ include clarifying questions and location handling — see DECISIONS.md § M4.0.
   `gemini-3.1-flash-lite` over REST, clarifying questions capped at two,
   location precedence, open-at-time checked in code. Key created in a separate
   billing-free project and verified with a model listing.
-- **M4.1** Gemini client in `llm.py`: one REST call with JSON-schema output, a
-  response cache, a daily call cap, every failure funnelled into one exception,
-  tests that cannot reach the network. One real call.
+- **M4.1** ✅ Gemini client in `llm.py`: one REST call with JSON-schema output,
+  a response cache and a 400/day cap (`cache.py`, now per-API), every failure
+  funnelled into `LLMUnavailable`, 19 tests that cannot reach the network. First
+  real call 2026-11-08 extracted "Boston" / "later" from the LA-to-Boston
+  sentence.
 - **M4.2** Extraction: sentence (plus prior turns) → what to eat, where, when,
   price, and what is still missing. Malformed or schema-invalid output handled
   without crashing the request.

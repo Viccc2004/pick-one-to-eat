@@ -1,7 +1,11 @@
-"""Guards around the network call: a response cache and a daily call cap.
+"""Guards around the network calls: a response cache and a daily call cap.
 
 Two jobs, one module, because both answer the same question — may this
 query actually go to Google, and what did it say last time?
+
+Each guarded API ("places", "gemini") gets its own cache file, its own
+counter file, and its own cap, so a busy day of LLM debugging can never
+eat into the Places budget or the other way round.
 
 The cap lives here rather than in the Google console because the console
 cannot express it: Places API (New) quotas are not adjustable, and a Maps
@@ -26,6 +30,12 @@ CACHE_TTL_SECONDS = 24 * 60 * 60
 # distinct queries, not of page loads - repeats inside the TTL are free.
 MAX_CALLS_PER_DAY = 30
 
+# Gemini's free tier refuses with a 429 after 500 requests/day on its own,
+# so this cap is not protecting money today. It is for the day billing
+# gets linked to the Gemini project by mistake, and it keeps the app's own
+# message ahead of Google's error. See docs/DECISIONS.md § M4.0.
+MAX_GEMINI_CALLS_PER_DAY = 400
+
 CACHE_DIR = Path(__file__).parent / ".cache"
 
 
@@ -42,12 +52,17 @@ class BudgetUnreadable(Exception):
     """
 
 
-def _responses_path() -> Path:
-    return CACHE_DIR / "responses.json"
+def _cap(api: str) -> int:
+    """Looked up at call time, so tests can patch the module constants."""
+    return {"places": MAX_CALLS_PER_DAY, "gemini": MAX_GEMINI_CALLS_PER_DAY}[api]
 
 
-def _budget_path() -> Path:
-    return CACHE_DIR / "budget.json"
+def _responses_path(api: str = "places") -> Path:
+    return CACHE_DIR / f"{api}_responses.json"
+
+
+def _budget_path(api: str = "places") -> Path:
+    return CACHE_DIR / f"{api}_budget.json"
 
 
 def _today() -> str:
@@ -69,14 +84,14 @@ def _normalize(query: str) -> str:
     return " ".join(query.lower().split())
 
 
-def get_cached(query: str) -> list[dict] | None:
+def get_cached(query: str, api: str = "places") -> list | dict | None:
     """Return the stored response for query, or None if absent or stale.
 
     A missing or unreadable cache file is a miss, not an error: the worst
     case is one extra call, and the daily cap still bounds that.
     """
     try:
-        with open(_responses_path(), encoding="utf-8") as f:
+        with open(_responses_path(api), encoding="utf-8") as f:
             entries = json.load(f)
     except (OSError, json.JSONDecodeError):
         return None
@@ -91,28 +106,28 @@ def get_cached(query: str) -> list[dict] | None:
     return entry["raw"]
 
 
-def store(query: str, raw: list[dict]) -> None:
+def store(query: str, raw: list | dict, api: str = "places") -> None:
     """Record a response against the query that produced it."""
     try:
-        with open(_responses_path(), encoding="utf-8") as f:
+        with open(_responses_path(api), encoding="utf-8") as f:
             entries = json.load(f)
     except (OSError, json.JSONDecodeError):
         entries = {}
 
     entries[_normalize(query)] = {"fetched_at": time.time(), "raw": raw}
-    _write_json(_responses_path(), entries)
+    _write_json(_responses_path(api), entries)
 
 
-def _read_budget() -> dict:
+def _read_budget(api: str = "places") -> dict:
     """Today's counter, reset automatically when the date rolls over."""
     try:
-        with open(_budget_path(), encoding="utf-8") as f:
+        with open(_budget_path(api), encoding="utf-8") as f:
             budget = json.load(f)
     except FileNotFoundError:
         return {"date": _today(), "count": 0}
     except (OSError, json.JSONDecodeError) as exc:
         raise BudgetUnreadable(
-            f"{_budget_path()} could not be read, so today's API spend is "
+            f"{_budget_path(api)} could not be read, so today's API spend is "
             f"unknown. Delete the file to reset the counter to zero."
         ) from exc
 
@@ -122,28 +137,29 @@ def _read_budget() -> dict:
     return budget
 
 
-def calls_today() -> int:
+def calls_today(api: str = "places") -> int:
     """How many live calls have been made today. Safe to call anywhere."""
-    return _read_budget()["count"]
+    return _read_budget(api)["count"]
 
 
-def check_daily_budget() -> None:
+def check_daily_budget(api: str = "places") -> None:
     """Raise DailyBudgetExceeded if another call would break the cap."""
-    used = calls_today()
-    if used >= MAX_CALLS_PER_DAY:
+    used = calls_today(api)
+    cap = _cap(api)
+    if used >= cap:
         raise DailyBudgetExceeded(
-            f"{used} of {MAX_CALLS_PER_DAY} API calls already used today. "
+            f"{used} of {cap} {api} API calls already used today. "
             f"The cap resets at midnight local time."
         )
 
 
-def record_call() -> None:
+def record_call(api: str = "places") -> None:
     """Count one live call.
 
     Called before the request, not after. A request that times out or
     errors may still have been served and billed, so the safe assumption
     for a spend guard is that every attempt counts.
     """
-    budget = _read_budget()
+    budget = _read_budget(api)
     budget["count"] += 1
-    _write_json(_budget_path(), budget)
+    _write_json(_budget_path(api), budget)

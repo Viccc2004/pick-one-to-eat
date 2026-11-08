@@ -25,6 +25,10 @@ def _no_network(*args, **kwargs):
 def fixtures_not_google(monkeypatch):
     """Run every test on fixtures, whatever find.USE_LIVE_API says.
 
+    The requests.post replacement covers Gemini too: llm.py calls it over
+    REST with the same requests module, so a test that forgets to stub it
+    fails here rather than spending the free tier.
+
     The switch is True in the app, and .env holds a real key, so without
     this a plain fixture test would make a billed call. Tests of the live
     path turn it back on and stub _fetch_live or requests.post themselves;
