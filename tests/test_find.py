@@ -89,22 +89,22 @@ def test_fixture_reads_never_touch_the_budget():
 
 def test_live_path_counts_the_call_and_stores_the_response(monkeypatch):
     monkeypatch.setattr(find, "USE_LIVE_API", True)
-    monkeypatch.setattr(find, "_fetch_live", lambda q: RAW_LIVE)
+    monkeypatch.setattr(find, "_fetch_live", lambda q, coords=None: RAW_LIVE)
 
-    assert search_places("chinese food") == RAW_LIVE
+    assert search_places("chinese food", "Allston") == RAW_LIVE
     assert cache.calls_today() == 1
-    # Stored under the composed query, location included - see
-    # test_location_is_part_of_the_cache_key in test_places_api.py.
-    assert cache.get_cached(find._build_query("chinese food")) == RAW_LIVE
+    # Stored under the composed query, place included - see
+    # test_the_place_is_part_of_the_cache_key in test_places_api.py.
+    assert cache.get_cached("chinese food in Allston") == RAW_LIVE
 
 
 def test_a_cache_hit_makes_no_call_and_costs_no_budget(monkeypatch):
-    cache.store(find._build_query("chinese food"), RAW_LIVE)
+    cache.store("chinese food in Allston", RAW_LIVE)
 
     monkeypatch.setattr(find, "USE_LIVE_API", True)
     monkeypatch.setattr(find, "_fetch_live", _must_not_be_called)
 
-    assert search_places("chinese food") == RAW_LIVE
+    assert search_places("chinese food", "Allston") == RAW_LIVE
     assert cache.calls_today() == 0
 
 
@@ -116,18 +116,18 @@ def test_an_exhausted_budget_stops_the_call_before_it_happens(monkeypatch):
     monkeypatch.setattr(find, "_fetch_live", _must_not_be_called)
 
     with pytest.raises(cache.DailyBudgetExceeded):
-        search_places("chinese food")
+        search_places("chinese food", "Allston")
 
 
 def test_a_failed_call_still_counts(monkeypatch):
-    def boom(query):
+    def boom(query, coords=None):
         raise TimeoutError("Google did not answer")
 
     monkeypatch.setattr(find, "USE_LIVE_API", True)
     monkeypatch.setattr(find, "_fetch_live", boom)
 
     with pytest.raises(TimeoutError):
-        search_places("chinese food")
+        search_places("chinese food", "Allston")
 
     # A request that times out may still have been served and billed, so
     # the spend guard has to assume every attempt cost money.
@@ -140,7 +140,7 @@ def test_missing_key_fails_before_spending_budget(monkeypatch):
     monkeypatch.setattr(find, "_fetch_live", _must_not_be_called)
 
     with pytest.raises(find.PlacesUnavailable, match="GOOGLE_PLACES_API_KEY"):
-        search_places("chinese food")
+        search_places("chinese food", "Allston")
 
     # Nothing could have left the machine, so nothing may be counted -
     # otherwise a half-filled .env quietly eats the day's 30 calls.

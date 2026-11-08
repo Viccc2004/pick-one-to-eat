@@ -145,23 +145,77 @@ def test_non_json_body_becomes_places_unavailable(api_key, monkeypatch):
 # --- query composition ----------------------------------------------------
 
 
-def test_fallback_location_is_appended_when_none_is_given():
-    assert find._build_query("dumplings") == f"dumplings in {find.FALLBACK_LOCATION}"
+def test_a_named_place_goes_into_the_text_with_no_bias():
+    text, bias, key = find._plan("dumplings", "Boston", coords=(34.05, -118.24))
+
+    # In LA, heading to Boston: the browser's LA position must not pull
+    # the results back toward LA.
+    assert text == "dumplings in Boston"
+    assert bias is None
+    assert key == "dumplings in Boston"
 
 
-def test_a_given_location_replaces_the_fallback():
-    assert find._build_query("dumplings", "Cambridge, MA") == "dumplings in Cambridge, MA"
+def test_without_a_named_place_the_browser_position_becomes_a_bias():
+    text, bias, key = find._plan("dumplings", None, coords=(42.353462, -71.132817))
+
+    assert text == "dumplings"
+    assert bias == (42.353, -71.133)
+    assert key == "dumplings @ 42.353,-71.133"
 
 
-def test_location_is_part_of_the_cache_key(monkeypatch):
+def test_with_neither_there_is_nothing_to_search():
+    # The page asks where before it gets here; reaching this is a bug,
+    # and a loud one beats a silent search of somewhere arbitrary.
+    with pytest.raises(ValueError):
+        find._plan("dumplings", None, None)
+
+
+def test_there_is_no_fallback_location_any_more():
+    assert not hasattr(find, "FALLBACK_LOCATION")
+
+
+def test_the_bias_is_sent_as_a_circle(api_key, monkeypatch):
+    sent = _capture_post(monkeypatch, FakeResponse(payload={"places": []}))
+
+    find._fetch_live("dumplings", (42.353, -71.133))
+
+    circle = sent["body"]["locationBias"]["circle"]
+    assert circle["center"] == {"latitude": 42.353, "longitude": -71.133}
+    assert circle["radius"] == find.LOCATION_BIAS_RADIUS_METERS
+
+
+def test_no_coordinates_means_no_bias_in_the_request(api_key, monkeypatch):
+    sent = _capture_post(monkeypatch, FakeResponse(payload={"places": []}))
+
+    find._fetch_live("dumplings in Boston")
+
+    assert "locationBias" not in sent["body"]
+
+
+def test_the_place_is_part_of_the_cache_key(monkeypatch):
     import cache
 
     monkeypatch.setattr(find, "USE_LIVE_API", True)
-    monkeypatch.setattr(find, "_fetch_live", lambda q: [{"q": q}])
+    monkeypatch.setattr(find, "_fetch_live", lambda q, coords=None: [{"q": q}])
 
     find.search_places("dumplings", "Cambridge, MA")
+    find.search_places("dumplings", coords=(42.35, -71.13))
 
-    # A result fetched for Cambridge must not be served to someone in
-    # Allston, so the two must not share a cache entry.
+    # A result fetched for one place must not be served to someone
+    # somewhere else, so no two places may share a cache entry.
     assert cache.get_cached("dumplings in Cambridge, MA") is not None
+    assert cache.get_cached("dumplings @ 42.350,-71.130") is not None
     assert cache.get_cached("dumplings in Allston, Boston") is None
+    assert cache.get_cached("dumplings @ 40.700,-74.000") is None
+
+
+def test_nearby_positions_share_a_cache_entry(monkeypatch):
+    calls = []
+    monkeypatch.setattr(find, "USE_LIVE_API", True)
+    monkeypatch.setattr(find, "_fetch_live", lambda q, coords=None: calls.append(coords) or [])
+
+    find.search_places("dumplings", coords=(42.35341, -71.13281))
+    find.search_places("dumplings", coords=(42.35339, -71.13279))
+
+    # A few metres of GPS jitter must not cost a second call.
+    assert len(calls) == 1

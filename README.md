@@ -3,11 +3,12 @@
 Describe what you want to eat in one sentence. Get back one restaurant
 and one line explaining why.
 
-**Status:** M4.3 done — the page reads your sentence through Gemini
+**Status:** M4.4 done — the page reads your sentence through Gemini
 (free tier), asks up to two follow-up questions if where or when is
-missing, then searches the live Google Places API and shows one
-restaurant. Ranking and the reason are still placeholder rules. Next is
-M4.4, using the browser's location when you don't name a place. Milestones live in [docs/PROJECT.md](docs/PROJECT.md) § 4.
+missing, then searches the live Google Places API — at the place you
+named, or near your browser's location if you named none — and shows
+one restaurant. Ranking and the reason are still placeholder rules.
+Next is M4.5: opening hours, the address, and a Google Maps link. Milestones live in [docs/PROJECT.md](docs/PROJECT.md) § 4.
 
 Set `find.USE_LIVE_API = False` to run on fixtures with no key and no
 cost. Tests always run on fixtures and never reach the network.

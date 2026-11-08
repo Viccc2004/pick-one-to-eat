@@ -80,10 +80,12 @@
       </ul>
     {% endif %}
 
-    <form action="/" method="get">
+    <form id="ask" action="/" method="get">
       {% for text in carry %}
         <input type="hidden" name="t" value="{{ text }}" />
       {% endfor %}
+      <input type="hidden" name="lat" value="{{ carry_coords[0] if carry_coords else '' }}" />
+      <input type="hidden" name="lng" value="{{ carry_coords[1] if carry_coords else '' }}" />
       <input
         type="text"
         name="q"
@@ -95,6 +97,36 @@
     </form>
     {% if question %}<a class="restart" href="/">Start over</a>{% endif %}
 
+    <script>
+      // The one piece of JavaScript in the app (docs/PROJECT.md § 3.3):
+      // the browser is the only source of the user's position. On submit,
+      // if no position is in the form yet, ask for one, round it to 3
+      // decimals (~110 m, matching find.COORD_DECIMALS) and submit. Refused,
+      // unavailable or slower than 8 s: submit without it, and the server
+      // asks where instead.
+      (function () {
+        var form = document.getElementById("ask");
+        if (!form || !navigator.geolocation) return;
+        form.addEventListener("submit", function (event) {
+          if (form.elements.lat.value) return;
+          event.preventDefault();
+          var button = form.querySelector("button");
+          button.disabled = true;
+          button.textContent = "Locating...";
+          var send = function () { form.submit(); };
+          navigator.geolocation.getCurrentPosition(
+            function (pos) {
+              form.elements.lat.value = pos.coords.latitude.toFixed(3);
+              form.elements.lng.value = pos.coords.longitude.toFixed(3);
+              send();
+            },
+            send,
+            { timeout: 8000, maximumAge: 600000 }
+          );
+        });
+      })();
+    </script>
+
     {% if error %}
       <div class="error">
         <p><strong>{{ error }}</strong></p>
@@ -102,6 +134,7 @@
       </div>
     {% elif place %}
       <p class="understood">Searched for: {{ understood }}</p>
+      {% if near_you %}<p class="assumption">{{ near_you }}</p>{% endif %}
       <div class="card">
         <h2>{{ place.name }}</h2>
         <p>{{ reason }}</p>
@@ -112,6 +145,7 @@
       {% endif %}
     {% elif searched %}
       <p class="understood">Searched for: {{ understood }}</p>
+      {% if near_you %}<p class="assumption">{{ near_you }}</p>{% endif %}
       <p class="empty">Nothing came back for that. Try different words.</p>
     {% endif %}
 

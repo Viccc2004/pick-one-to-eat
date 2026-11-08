@@ -47,11 +47,17 @@ REQUEST_TIMEOUT_SECONDS = 10
 # key, no network, and no cost. Tests pin it to False in conftest.py.
 USE_LIVE_API = True
 
-# Where the query goes when the browser will not say where the user is.
-# Appended to the query text rather than geocoded into coordinates: that
-# is what M0 validated, and it avoids enabling a second billable API on
-# the path that is already the degraded one. See docs/DECISIONS.md.
-FALLBACK_LOCATION = "Allston, Boston"
+# How far around the browser's position results are preferred. A bias,
+# not a restriction: Google may still return something further out when
+# nothing closer matches, which beats an empty page. 5 km is a short
+# drive or a long walk.
+LOCATION_BIAS_RADIUS_METERS = 5000
+
+# Coordinates are rounded to 3 decimals (about 110 m) before they are used.
+# Precise enough for a 5 km bias; coarse enough that requests from the same
+# block share a cache entry, and that the exact position never lands in a
+# URL or a cache file. The page rounds the same way before submitting.
+COORD_DECIMALS = 3
 
 
 class PlacesUnavailable(Exception):
@@ -74,13 +80,25 @@ def _api_key() -> str:
     return api_key
 
 
-def _fetch_live(query: str) -> list[dict]:
+def _fetch_live(query: str, coords: tuple[float, float] | None = None) -> list[dict]:
     """Call Places Text Search and return its raw items.
+
+    With coords, results are biased toward that point; without, the
+    query text has to carry the place itself.
 
     Every failure becomes PlacesUnavailable, so callers have one thing to
     catch and the web layer can show a sentence instead of a traceback.
     """
     api_key = _api_key()
+
+    body = {"textQuery": query, "maxResultCount": MAX_RESULTS}
+    if coords is not None:
+        body["locationBias"] = {
+            "circle": {
+                "center": {"latitude": coords[0], "longitude": coords[1]},
+                "radius": LOCATION_BIAS_RADIUS_METERS,
+            }
+        }
 
     try:
         response = requests.post(
@@ -90,7 +108,7 @@ def _fetch_live(query: str) -> list[dict]:
                 "X-Goog-Api-Key": api_key,
                 "X-Goog-FieldMask": FIELD_MASK,
             },
-            json={"textQuery": query, "maxResultCount": MAX_RESULTS},
+            json=body,
             timeout=REQUEST_TIMEOUT_SECONDS,
         )
     except requests.RequestException as exc:
@@ -112,19 +130,36 @@ def _fetch_live(query: str) -> list[dict]:
     return body.get("places", [])
 
 
-def _build_query(query: str, location: str | None = None) -> str:
-    """Attach a location to the user's sentence.
+def round_coords(lat: float, lng: float) -> tuple[float, float]:
+    return (round(lat, COORD_DECIMALS), round(lng, COORD_DECIMALS))
 
-    The location is always appended, even when the sentence already names
-    one - "dumplings in Allston" becomes "dumplings in Allston, Boston",
-    which Text Search resolves fine. Detecting a location the user already
-    gave is constraint extraction, which is M4's job and needs an LLM.
+
+def _plan(
+    query: str, location: str | None, coords: tuple[float, float] | None
+) -> tuple[str, tuple[float, float] | None, str]:
+    """Decide how the place reaches Google: (text query, bias, cache key).
+
+    A named place wins and goes into the text - "dumplings in Boston" -
+    with no bias, because the user may be standing somewhere else. Only
+    with no named place do the browser's coordinates become a bias. There
+    is no third option: with neither, there is nothing to search near,
+    and the page asks instead of calling. See docs/DECISIONS.md § M4.4.
     """
-    return f"{query} in {location or FALLBACK_LOCATION}"
+    if location:
+        text = f"{query} in {location}"
+        return text, None, text
+    if coords is not None:
+        coords = round_coords(*coords)
+        return query, coords, f"{query} @ {coords[0]:.{COORD_DECIMALS}f},{coords[1]:.{COORD_DECIMALS}f}"
+    raise ValueError("search_places needs a named place or coordinates")
 
 
-def search_places(query: str, location: str | None = None) -> list[dict]:
-    """Return raw Google response items for a text query.
+def search_places(
+    query: str,
+    location: str | None = None,
+    coords: tuple[float, float] | None = None,
+) -> list[dict]:
+    """Return raw Google response items for a search phrase and a place.
 
     Fixture reads are free and bypass both guards entirely - counting them
     would exhaust the daily budget without a single call leaving the
@@ -140,20 +175,20 @@ def search_places(query: str, location: str | None = None) -> list[dict]:
     if not USE_LIVE_API:
         return _fetch_fixtures()
 
-    # The location is part of the cache key, not just the request. Without
-    # it, a result fetched for Allston would be served to someone standing
+    # The place is part of the cache key, not just the request. Without it,
+    # a result fetched for Allston would be served to someone standing
     # somewhere else.
-    full_query = _build_query(query, location)
+    text, bias, key = _plan(query, location, coords)
 
-    cached = cache.get_cached(full_query)
+    cached = cache.get_cached(key)
     if cached is not None:
         return cached
 
     _api_key()
     cache.check_daily_budget()
     cache.record_call()
-    raw = _fetch_live(full_query)
-    cache.store(full_query, raw)
+    raw = _fetch_live(text, bias)
+    cache.store(key, raw)
     return raw
 
 

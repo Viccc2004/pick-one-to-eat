@@ -36,9 +36,10 @@ sentence explaining why it fits what you asked for.
 **Status as of 2026-11-08:** M0–M2 done; M3.1–M3.4 done. The app answers
 from the live Places API, behind the 24-hour cache and the 30/day cap. 47
 passing tests, none of which touch the network. M3.5 (geolocation) folded
-into M4. M4.0–M4.3 done: the page reads the user's words through Gemini, asks up to
-two follow-up questions, and searches the place they named. 104 passing
-tests. Next: M4.4, browser geolocation.
+into M4. M4.0–M4.4 done: the page reads the user's words through Gemini, asks up to
+two follow-up questions, and searches the place they named or, failing that,
+near the browser's position. 117 passing tests. Next: M4.5, opening hours,
+address and Maps link.
 
 ### Shape (settled 2026-09-11, conversation and location rows revised 2026-11-08)
 
@@ -485,9 +486,10 @@ include clarifying questions and location handling — see DECISIONS.md § M4.0.
   in hidden `t` fields by GET, server still stateless; past the cap, "when"
   defaults to now and says so, "where" keeps being asked. The page states what
   it searched for. Gemini timeouts cut to 15s and retried once.
-- **M4.4** Location (was M3.5): browser geolocation → `locationBias`; a named
-  place → appended text; neither → ask, no Places call. The page says which
-  location it used.
+- **M4.4** ✅ Location (was M3.5): browser geolocation → 5 km `locationBias`; a
+  named place → appended text, no bias; neither → ask, no Places call.
+  Coordinates rounded to ~110 m. The page says when it searched near the user.
+  `FALLBACK_LOCATION` removed.
 - **M4.5** Field mask and opening hours. Four fields join the mask together, so
   the SKU is re-checked once: `regularOpeningHours` (Enterprise) and
   `utcOffsetMinutes` for open-at-the-requested-time, computed in code at request

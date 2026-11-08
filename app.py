@@ -20,10 +20,13 @@ app = FastAPI()
 # started from.
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
-# M4.4 replaces this with navigator.geolocation. Until then the server
-# never knows where the browser is, so a request that names no place is
-# asked where - which is also exactly the "location refused" path.
-HAS_BROWSER_LOCATION = False
+# Said whenever the search ran on the browser's position rather than a
+# place the user named, so the default is never silent. See
+# docs/DECISIONS.md § Location: named place > browser location > ask.
+NEAR_YOU_NOTE = (
+    "You didn't name a place, so this searched near your current location. "
+    "Name one to search somewhere else."
+)
 
 # Each expected failure gets a sentence; none gets a traceback.
 _FAILURE_MESSAGES = {
@@ -55,6 +58,22 @@ def _pair_up(history: list[str]) -> list[tuple[str, str]]:
     return [("user" if i % 2 == 0 else "app", text) for i, text in enumerate(history)]
 
 
+def _coords(lat: str, lng: str) -> tuple[float, float] | None:
+    """The browser's position, or None if absent, refused, or nonsense.
+
+    Arrives as text from hidden form fields, so anything that is not a
+    real coordinate pair is treated as "no location" rather than an error:
+    the user is then simply asked where.
+    """
+    try:
+        lat_f, lng_f = float(lat), float(lng)
+    except ValueError:
+        return None
+    if not (-90 <= lat_f <= 90 and -180 <= lng_f <= 180):
+        return None
+    return find.round_coords(lat_f, lng_f)
+
+
 def _describe(req: extract.Request) -> str:
     """What was actually searched, in one line, so no assumption is silent."""
     where = req.location or "near you"
@@ -73,21 +92,28 @@ def home(
     q: str = "",
     t: list[str] = Query(default=[]),
     rank: int = 0,
+    lat: str = "",
+    lng: str = "",
 ):
     """Render the form, a follow-up question, or a single result.
 
-    Stateless: the conversation so far travels in hidden `t` fields and
-    the candidate index in the URL, so neither asking a question nor
-    "show me another" needs session storage.
+    Stateless: the conversation so far travels in hidden `t` fields, the
+    browser's position in `lat`/`lng`, and the candidate index in the URL,
+    so neither asking a question nor "show me another" needs session
+    storage.
     """
+    coords = _coords(lat, lng)
+
     context = {
         "q": "",
         "rank": rank,
         "history": [],
         "question": None,
         "carry": [],
+        "carry_coords": None,
         "understood": None,
         "assumptions": (),
+        "near_you": None,
         "place": None,
         "reason": None,
         "more_url": None,
@@ -108,7 +134,7 @@ def home(
     turns = _pair_up(t) + [("user", q.strip())]
 
     try:
-        understood = extract.extract(turns, has_browser_location=HAS_BROWSER_LOCATION)
+        understood = extract.extract(turns, has_browser_location=coords is not None)
     except _EXPECTED_FAILURES as exc:
         context.update(_failure(exc))
         context["q"] = q
@@ -120,16 +146,24 @@ def home(
         context["history"] = turns
         context["question"] = understood.question
         context["carry"] = [text for _, text in turns] + [understood.question]
+        # The answer to a follow-up keeps the position the first submit
+        # found, so the browser is not asked again mid-conversation.
+        context["carry_coords"] = coords
         return render()
 
     context["understood"] = _describe(understood)
     context["assumptions"] = understood.assumptions
+    context["near_you"] = NEAR_YOU_NOTE if understood.location is None else None
     context["searched"] = True
 
     try:
         candidates = rank_places(
             parse_places(
-                search_places(understood.search_text, location=understood.location)
+                search_places(
+                    understood.search_text,
+                    location=understood.location,
+                    coords=coords,
+                )
             )
         )
     except _EXPECTED_FAILURES as exc:
@@ -148,6 +182,8 @@ def home(
             # Same conversation, next candidate. Re-reading it is a cache
             # hit for both Gemini and Places, so paging costs no call.
             params = [("t", text) for text in t] + [("q", q), ("rank", rank + 1)]
+            if coords is not None:
+                params += [("lat", coords[0]), ("lng", coords[1])]
             context["more_url"] = "/?" + urlencode(params)
 
     return render()

@@ -794,3 +794,48 @@ language the user wrote in — a Chinese request gets a Chinese reason.
 The rule that it may cite only supported conditions is unchanged; more
 sentences means more room to invent, which M4.6's tests and M5's eval
 have to watch.
+
+## M4.4 — 2026-11-08
+
+Browser geolocation, previously M3.5. `FALLBACK_LOCATION` is gone.
+
+### How each source reaches Google
+- **A named place** → appended to the text, `"ramen in Boston"`, with
+  **no** bias. Live check: LA coordinates plus "ramen in Boston" returned
+  a Boston restaurant. Biasing toward where the user stands would pull
+  the results back toward LA.
+- **Browser position only** → the search phrase alone, plus a
+  `locationBias` circle of 5 km. A bias rather than a restriction, so a
+  sparse area returns something further out instead of nothing. Live
+  check: Allston coordinates returned Allston ramen; LA coordinates
+  returned Little Tokyo.
+- **Neither** → `find._plan` raises `ValueError`. The page asks where
+  before it ever gets there, so reaching it is a bug, and it should be a
+  loud one rather than a silent search of somewhere arbitrary.
+
+### Coordinates rounded to 3 decimals, on both sides
+About 110 m. The page rounds before submitting and the server rounds
+again before using them. Precise enough for a 5 km bias; coarse enough
+that GPS jitter on the same block is one cache entry, not one call per
+refresh; and the exact position never lands in a URL, the browser
+history, or `.cache/`.
+
+### When the page asks the browser
+On submit, only if the form has no position yet. A follow-up answer
+carries the position the first submit found, so the browser is not
+asked again mid-conversation. A fresh search starts empty and looks
+again, since the user may have moved — the browser's own 10-minute
+`maximumAge` keeps that cheap. Refused, unavailable, or slower than 8s:
+the form submits without a position and the server asks where.
+
+### "Near you" is always said
+A search run on the browser's position prints "You didn't name a place,
+so this searched near your current location. Name one to search
+somewhere else." The default is the requirement; saying it is what keeps
+it from being a silent guess.
+
+### Not tested automatically
+The script itself has no test — there is no browser in the test suite.
+The server side of every path it can produce (position, no position,
+nonsense position) is covered; the script is checked by hand in a
+browser.

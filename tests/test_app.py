@@ -89,7 +89,7 @@ def test_the_extracted_place_is_what_goes_to_google(gemini, monkeypatch):
     gemini.reply = understood(search_text="cheap dumplings", location="Boston")
     sent = []
     monkeypatch.setattr(find, "USE_LIVE_API", True)
-    monkeypatch.setattr(find, "_fetch_live", lambda q: sent.append(q) or [])
+    monkeypatch.setattr(find, "_fetch_live", lambda q, coords=None: sent.append(q) or [])
 
     client.get("/", params={"q": "in LA now, heading to Boston, cheap dumplings"})
 
@@ -189,6 +189,87 @@ def test_user_text_is_escaped_in_the_hidden_fields(gemini):
     assert "<script>alert(1)</script>" not in response.text
 
 
+# --- location: named place > browser position > ask -----------------------------
+
+BROWSER = {"lat": "42.3534", "lng": "-71.1328"}
+
+
+def test_with_a_browser_position_no_place_is_needed(gemini, monkeypatch):
+    gemini.reply = understood(location=None)
+    sent = []
+    monkeypatch.setattr(find, "USE_LIVE_API", True)
+    monkeypatch.setattr(find, "_fetch_live", lambda q, coords=None: sent.append((q, coords)) or [])
+
+    response = client.get("/", params={"q": "ramen now", **BROWSER})
+
+    assert "Where do you want to eat?" not in response.text
+    assert sent == [("ramen", (42.353, -71.133))]
+
+
+def test_searching_near_you_is_said_out_loud(gemini):
+    gemini.reply = understood(location=None)
+
+    response = client.get("/", params={"q": "ramen now", **BROWSER})
+
+    assert "ramen · near you · now" in response.text
+    assert "searched near your current location" in response.text
+
+
+def test_a_named_place_beats_the_browser_position(gemini, monkeypatch):
+    gemini.reply = understood(location="Boston")
+    sent = []
+    monkeypatch.setattr(find, "USE_LIVE_API", True)
+    monkeypatch.setattr(find, "_fetch_live", lambda q, coords=None: sent.append((q, coords)) or [])
+
+    response = client.get("/", params={"q": "in LA, heading to Boston, ramen", **BROWSER})
+
+    assert sent == [("ramen in Boston", None)]
+    assert "searched near your current location" not in response.text
+
+
+def test_nonsense_coordinates_count_as_no_location(gemini):
+    gemini.reply = understood(location=None)
+
+    response = client.get("/", params={"q": "ramen now", "lat": "999", "lng": "abc"})
+
+    assert "Where do you want to eat?" in response.text
+
+
+def test_a_follow_up_keeps_the_position_found_on_the_first_submit(gemini):
+    gemini.reply = understood(location=None, when="unknown")
+
+    response = client.get("/", params={"q": "ramen", **BROWSER})
+
+    assert '<input type="hidden" name="lat" value="42.353" />' in response.text
+    assert '<input type="hidden" name="lng" value="-71.133" />' in response.text
+
+
+def test_a_new_search_asks_the_browser_again(gemini):
+    # Only a follow-up carries the position. A fresh search leaves the
+    # fields empty so the page script looks again - the user may have moved.
+    gemini.reply = understood(location=None)
+
+    response = client.get("/", params={"q": "ramen now", **BROWSER})
+
+    assert '<input type="hidden" name="lat" value="" />' in response.text
+
+
+def test_show_me_another_keeps_the_position(gemini):
+    gemini.reply = understood(location=None)
+
+    response = client.get("/", params={"q": "chinese now", **BROWSER})
+
+    link = response.text.split('class="more" href="')[1].split('"')[0]
+    params = parse_qs(urlparse(link.replace("&amp;", "&")).query)
+    assert (params["lat"], params["lng"]) == (["42.353"], ["-71.133"])
+
+
+def test_the_page_carries_the_geolocation_script():
+    response = client.get("/")
+
+    assert "navigator.geolocation" in response.text
+
+
 # --- failures reach the page as a sentence, never as a traceback ----------------
 
 
@@ -206,7 +287,7 @@ def test_exhausted_places_budget_renders_a_message_not_a_500(monkeypatch):
 
 
 def test_unreachable_google_renders_a_message_not_a_500(monkeypatch):
-    def boom(query):
+    def boom(query, coords=None):
         raise find.PlacesUnavailable("Could not reach Google Places: timed out")
 
     monkeypatch.setattr(find, "USE_LIVE_API", True)
@@ -246,9 +327,9 @@ def test_exhausted_gemini_budget_renders_a_message(gemini):
 def test_a_failure_still_renders_the_form_so_the_user_can_retry(monkeypatch):
     monkeypatch.setattr(find, "USE_LIVE_API", True)
     monkeypatch.setattr(
-        find, "_fetch_live", lambda q: (_ for _ in ()).throw(find.PlacesUnavailable("x"))
+        find, "_fetch_live", lambda q, coords=None: (_ for _ in ()).throw(find.PlacesUnavailable("x"))
     )
 
     response = client.get("/", params={"q": "chinese"})
 
-    assert '<form action="/"' in response.text
+    assert '<form id="ask" action="/"' in response.text
