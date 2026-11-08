@@ -36,8 +36,9 @@ sentence explaining why it fits what you asked for.
 **Status as of 2026-11-08:** M0–M2 done; M3.1–M3.4 done. The app answers
 from the live Places API, behind the 24-hour cache and the 30/day cap. 47
 passing tests, none of which touch the network. M3.5 (geolocation) folded
-into M4. M4.0 (scope and provider decisions) and M4.1 (the Gemini client) done;
-66 passing tests. Next: M4.2, extraction.
+into M4. M4.0 (scope and provider decisions), M4.1 (the Gemini client) and M4.2
+(extraction) done; 85 passing tests. Next: M4.3, the clarifying loop on the
+page.
 
 ### Shape (settled 2026-09-11, conversation and location rows revised 2026-11-08)
 
@@ -476,9 +477,10 @@ include clarifying questions and location handling — see DECISIONS.md § M4.0.
   funnelled into `LLMUnavailable`, 19 tests that cannot reach the network. First
   real call 2026-11-08 extracted "Boston" / "later" from the LA-to-Boston
   sentence.
-- **M4.2** Extraction: sentence (plus prior turns) → what to eat, where, when,
-  price, and what is still missing. Malformed or schema-invalid output handled
-  without crashing the request.
+- **M4.2** ✅ Extraction in `extract.py`: conversation → search phrase, place,
+  now/later + day + time, price; code decides what is missing and which of the
+  LLM's three pre-written questions to show. Bad fields degrade to "not said"
+  one at a time. 18 tests; seven live trial sentences all correct.
 - **M4.3** Clarifying loop: up to two follow-up questions, prior turns carried
   in hidden form fields, server still stateless.
 - **M4.4** Location (was M3.5): browser geolocation → `locationBias`; a named

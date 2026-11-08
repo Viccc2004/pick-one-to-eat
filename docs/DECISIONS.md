@@ -652,3 +652,62 @@ On a machine without `.env` they would have failed. `conftest.py` now
 sets fake values for both keys in every test, so no test ever holds a
 real key and the suite passes with no `.env` present (verified by running
 it from a copy of the repository without one).
+
+## M4.2 — 2026-11-08
+
+Extraction, `extract.py`: the conversation in, a `Request` out — what to
+search for, where, when, price, what is still missing, and the question
+to ask about it. Not yet wired into the page (M4.3).
+
+### The LLM reads, the code decides what is missing
+The first version asked the LLM to judge what was missing and write one
+question about it. On the live run it got this wrong in both directions:
+for "ramen" with browser location available it asked where *and* when;
+for "ramen" without it, it asked only where. The fields it extracted were
+right both times — the judgement on top of them was not.
+
+Now the LLM always writes three questions (where, now-or-later, what
+time) in the user's language, whatever the conversation says, and
+`find_missing` picks which ones are shown. The LLM is never asked a
+conditional. Re-run: all seven trial sentences correct.
+
+### Only where and when are asked; food is not
+"Somewhere to eat near me" is a complete request. With no food named,
+the search phrase is `"restaurant"`. Follow-up questions are spent only
+on what the search cannot run without (where, when) or cannot filter
+without (a time for "later").
+
+### The search phrase is written by the LLM, in English
+Supersedes the 2026-09-11 "the sentence goes to Google largely as
+written". With clarifying turns there is no single sentence to send, so
+the LLM writes a short phrase — food plus qualities, no place, no time —
+and code adds the place. It is asked for English so that a Chinese
+request ("想吃火锅") searches as "hot pot"; on the first run, before that
+instruction, it passed "火锅" through untranslated.
+
+### Meal words map to fixed times
+Breakfast 08:00, brunch 11:00, lunch 12:00, dinner 19:00, late night
+22:00, stated in the prompt. This is the one place the LLM is told to
+fill a gap, so it is a written rule rather than the model's taste, and
+the page will say which time it assumed (M4.7).
+
+### No clock and no permission flag in the prompt
+The LLM answers "tomorrow" / "19:00"; code will turn that into a date at
+request time (M4.5). Whether the browser gave a location only affects
+what is missing, which code decides. Keeping both out means the prompt
+depends on the user's words alone: the same words are one cache entry,
+"show me another" costs no call, and "ramen" with and without location
+permission was a cache hit on the live run.
+
+### Bad fields degrade to "not said", one field at a time
+Each field is checked on its own: an unknown enum, a time not in `HH:MM`,
+a wrong type, or an absent key becomes `None` (or `"unknown"` for when).
+That surfaces in `missing`, so a bad answer turns into a question rather
+than a crash or a guess. Case and stray whitespace in enums are
+forgiven. An `LLMUnavailable` is not caught here: the page owns the
+sentence for that.
+
+### Latency, second sample
+Seven new prompts, twice: 0.8–3.7s mostly, one 10.8s, one 16.2s, and one
+more 30s timeout. Two timeouts in fourteen calls. Whether to retry once
+on timeout is M4.3's decision, where a person is actually waiting.

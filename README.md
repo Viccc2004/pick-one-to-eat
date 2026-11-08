@@ -3,11 +3,11 @@
 Describe what you want to eat in one sentence. Get back one restaurant
 and one line explaining why.
 
-**Status:** M4.1 done — `llm.py` calls Gemini (free tier) and gets back
-schema-shaped JSON, behind its own cache and a 400/day cap; the page does
-not use it yet. The app answers from the live Google Places API, behind
-a 24-hour cache and a 30/day call cap. Next is M4.2, extracting what,
-where, and when from the sentence. Milestones live in [docs/PROJECT.md](docs/PROJECT.md) § 4.
+**Status:** M4.2 done — `extract.py` reads the user's words through
+Gemini (free tier) and returns what to search, where, when, and what is
+still missing; the page does not use it yet. The app answers from the
+live Google Places API, behind a 24-hour cache and a 30/day call cap.
+Next is M4.3, asking the follow-up questions on the page. Milestones live in [docs/PROJECT.md](docs/PROJECT.md) § 4.
 
 Set `find.USE_LIVE_API = False` to run on fixtures with no key and no
 cost. Tests always run on fixtures and never reach the network.
