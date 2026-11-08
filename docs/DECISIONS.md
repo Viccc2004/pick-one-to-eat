@@ -460,3 +460,132 @@ The recommendation was a closed restaurant, and so was the runner-up.
 Nothing is broken — the M2 ranker was never asked to care, and the
 fixtures happened not to show it. Recorded as an open question in
 PROJECT.md § 5 rather than fixed here, to keep this change to the flip.
+
+## M4.0 — 2026-11-08
+
+Scope and provider decisions taken before any M4 code. Several of them
+reverse earlier entries; each says which.
+
+### Gemini free tier replaces Claude
+Supersedes the `claude-opus-5` default in PROJECT.md § 3.4 and the
+`ANTHROPIC_API_KEY` slot in `.env.example`.
+
+The Gemini API has a free tier; Claude does not. Expected LLM spend drops
+from ~$0.01 per recommendation to $0.00, which is the same posture § 3.5
+takes for Places: any spend at all means something is broken.
+
+Verified 2026-11-08 in AI Studio: the key lives in a **new, separate
+project** (`PickAPI`, `gen-lang-client-0904457958`) whose billing tier is
+shown as Free. It deliberately does not live in the Places project. Gemini
+limits and billing attach to the project, and the Places project has a
+billing account linked — a key created there would plausibly bill as paid
+tier from the first call.
+
+Accepted costs:
+
+- Free-tier prompts and responses may be used by Google to improve its
+  products. The content is restaurant requests; acceptable.
+- Free-tier limits are best effort and have been cut before. If they drop
+  again, this decision is the one to revisit, not the app's design.
+
+### Model: `gemini-3.1-flash-lite`, pinned
+Free-tier limits observed in AI Studio on 2026-11-08 for the `PickAPI`
+project:
+
+| Model | RPM | RPD |
+| --- | --- | --- |
+| Gemini 3.1 Flash Lite | 15 | **500** |
+| Gemini 3 Flash | 5 | 20 |
+| Gemini 2.5 Flash | 5 | 20 |
+| Gemini 2.5 Flash Lite | 10 | 20 |
+| Gemini 2.5 Pro / 3.1 Pro | 0 | 0 |
+
+One recommendation can take up to four LLM calls (up to three
+extraction turns plus one ranking call). At 20/day that is five
+recommendations a day, which an M5 eval run of ~20 sentences would exhaust
+on its own. At 500/day it is 125. Model quality is M5's question to answer
+with evidence; quota decides the starting point.
+
+The ID is the pinned `gemini-3.1-flash-lite`, not the
+`gemini-flash-lite-latest` alias. An alias Google can repoint would make
+an M5 score change impossible to attribute to the prompt.
+
+### REST through `requests`, not the `google-genai` SDK
+The SDK depends on `cryptography`, whose current release (50.0.2) has no
+prebuilt wheel for this machine (x86_64 macOS) and failed to build from
+source. Rather than pin an older `cryptography`, Gemini is called as a
+plain HTTP endpoint with `requests` — the same pattern as `find.py`.
+
+That turns out to be the better choice on its own merits: no new
+dependency, one HTTP library in the codebase, and the `requests.post` guard
+in `conftest.py` already makes it impossible for a test to reach Gemini.
+
+### LLM calls get a cache and a daily cap, like Places
+On the free tier Google enforces the daily limit itself with a 429, so
+the cap is not protecting money today. It exists for the day billing gets
+linked to the project by mistake, and so the app's own message fires
+before Google's error. Cap set below the 500 RPD free limit.
+
+The cache matters more than the cap. "Show me another" re-runs the
+pipeline from the URL; with LLM responses cached by prompt, paging to
+rank 2 costs no LLM call, the same way it already costs no Places call.
+
+### Clarifying questions move into v1, capped at two
+Supersedes § Single turn, not pseudo-multi-turn (2026-09-15). The
+"multi-turn slot filling" BACKLOG entry moves into scope.
+
+The LLM reads the sentence and decides what is missing. If something is,
+the page asks; the user answers; at most **two** such rounds. The cap is
+enforced in code, not left to the prompt. When the cap is reached:
+
+- **When to eat** still unknown → assume now, and say so.
+- **Where** still unknown → no Places call; ask the user for a location.
+  (Only reachable when the sentence names no place *and* the browser gave
+  no location — see the next entry.)
+
+The server stays stateless. Prior turns travel in hidden form fields and
+come back with each submit, which is how the 2026-09-11 pseudo-multi-turn
+entry proposed to do it. The open-ended "change one condition and
+recompute" BACKLOG entry is a different feature and stays in BACKLOG.
+
+### Location: named place > browser location > ask
+Supersedes § Geolocation fallback is "Allston, Boston", hardcoded and
+§ The location is always appended, even when the user gave one. Absorbs
+M3.5.
+
+1. **The sentence names a place** ("I'm in LA but heading to Boston") →
+   the LLM extracts "Boston", and it is appended to the Text Search query
+   as text. Still no Geocoding API, for the reasons in § Fallback location
+   is query text, not a geocoded coordinate.
+2. **No place named** → the user's current location from
+   `navigator.geolocation`, passed as `locationBias`. The page states that
+   it searched near the user's current location, so the default is never
+   silent and the user knows naming a place would change it.
+3. **No place named and no browser location** → no Places call. The page
+   asks where.
+
+`FALLBACK_LOCATION` is removed. A hardcoded Allston answer for someone
+standing elsewhere is a confident wrong answer, which § Reasoning may only
+cite supported conditions exists to prevent.
+
+### Open-at-that-time is decided in code, not by the LLM
+Resolves the PROJECT.md § 5 question "Closed places ranked first."
+
+The LLM extracts *when* the user wants to eat. Whether a place is open
+then is arithmetic over opening hours, and is done in Python where it is
+deterministic and testable. The LLM only ranks and explains candidates
+that already passed.
+
+Two findings force a schema change:
+
+- A time other than now needs weekly hours, so `regularOpeningHours` joins
+  the field mask. PROJECT.md § 3.1 lists it in the Enterprise row, the
+  same tier as the existing `currentOpeningHours`, so the call price should
+  not move. To be re-verified against current Google docs before the mask
+  changes — the field mask is a money control.
+- **The current `openNow` is wrong for up to 24 hours.** It is evaluated
+  by Google at fetch time and then served from the 24-hour cache, so a
+  place that closed at 21:00 can still read "open right now" at 23:00 from
+  a 19:00 fetch. Computing open-ness from hours at request time fixes this
+  as a side effect. How the place's local time zone is obtained (and which
+  SKU that field sits in) is open until M4.5.

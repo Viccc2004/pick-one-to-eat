@@ -33,22 +33,27 @@ authority. Citations elsewhere in this document point here.
 Describe what you want to eat in one sentence. Get back one restaurant and one
 sentence explaining why it fits what you asked for.
 
-**Status as of 2026-09-27:** M0–M2 done; M3.1–M3.4 done. The app answers
+**Status as of 2026-11-08:** M0–M2 done; M3.1–M3.4 done. The app answers
 from the live Places API, behind the 24-hour cache and the 30/day cap. 47
-passing tests, none of which touch the network. Next: M3.5, browser
-geolocation.
+passing tests, none of which touch the network. M3.5 (geolocation) folded
+into M4. M4.0 (scope and provider decisions) done; next: M4.1, the Gemini
+client.
 
-### Shape (settled 2026-09-11, conversation row revised 2026-09-15)
+### Shape (settled 2026-09-11, conversation and location rows revised 2026-11-08)
 
 | Aspect | Decision |
 | --- | --- |
 | Input | One natural-language sentence |
+| Clarification | The LLM may ask up to **two** follow-up questions (where, when) before searching. Cap enforced in code |
+| Location | A place named in the sentence > the browser's current location > ask. The page says which one it used |
+| Time | Now by default; a later time if the user gives one. Open-at-that-time is checked in code |
 | Ranking | LLM ranks a top-3 internally |
 | Output | **One** restaurant shown, with one sentence of reasoning |
 | Held back | Ranks 2 and 3 are kept for a "show me another" action |
-| Conversation | None. One sentence in, one answer out. The server is stateless: query and candidate index travel in the URL |
+| State | The server is stateless: prior turns travel in hidden form fields, the candidate index in the URL |
 | Interface | Web page — FastAPI backend, server-rendered HTML, no JS framework |
 | Data source | Google Places API (New), Text Search |
+| LLM | Gemini API, free tier, `gemini-3.1-flash-lite`, called over REST |
 
 The reasoning sentence must cite only conditions the data can actually support.
 Where the data is silent, the app says so and tells the user to verify — it does
@@ -57,9 +62,9 @@ conditions.
 
 ### Out of scope for v1
 
-User accounts, saved favorites, maps, multiple data sources, conversation
-history of any kind — neither the page resending prior turns nor the LLM asking
-follow-up questions — deployment, wait-time or queue-length features. Anything
+User accounts, saved favorites, maps, multiple data sources, open-ended
+conversation — refining a result after it is shown, or more than two
+clarifying questions — deployment, wait-time or queue-length features. Anything
 cut goes to [../BACKLOG.md](../BACKLOG.md).
 
 ---
@@ -201,31 +206,26 @@ in the form was in scope until 2026-09-15 and is now in
 [../BACKLOG.md](../BACKLOG.md); it can be added later without touching the
 ranking pipeline.
 
-**Location comes from browser geolocation** (settled 2026-09-15). This is the
-one place the page runs JavaScript: a few lines of vanilla `navigator.geolocation`
-that fill a hidden lat/lng field before submit. That is consistent with § 0 — the
-rule bans frameworks and build steps, not the browser API that is the only source
-of this value. Two consequences to build for in M3: the API requires a secure
-context, which `127.0.0.1` satisfies, so local development works without HTTPS;
-and permission can be denied or unavailable, so a fallback location must exist.
-The fallback is **"Allston, Boston"** (settled 2026-09-15) — the location M0 was
-validated against — as a named constant in `find.py`, not a `.env` variable. It
-carries nothing secret and nothing deployment-specific, and putting it in `.env`
-would let a half-filled `.env` break the app for no benefit while deployment is
-out of scope.
+**Location** (revised 2026-11-08; the 2026-09-15 "Allston, Boston" fallback is
+retired). Three sources, in order:
 
-The two paths reach Places differently, and deliberately so:
+1. **A place named in the sentence** ("in LA now, heading to Boston") — the LLM
+   extracts it and it is appended to the Text Search query as text.
+2. **The browser's current location** — a few lines of vanilla
+   `navigator.geolocation` fill hidden lat/lng fields before submit, and they go
+   to Text Search as `locationBias`. The page tells the user it searched near
+   their current location.
+3. **Neither** — no Places call. The page asks the user where.
 
-- **Geolocation succeeded** → lat/lng go in as a Text Search `locationBias`.
-- **Geolocation refused or unavailable** → the string is appended to the query
-  text. This is exactly what M0 did and validated; Text Search resolves place
-  names itself.
+The geolocation script is the one place the page runs JavaScript. That is
+consistent with § 0 — the rule bans frameworks and build steps, not the browser
+API that is the only source of this value. The API requires a secure context,
+which `127.0.0.1` satisfies, so local development works without HTTPS.
 
-The fallback is **not** geocoded into coordinates. Turning the string into
-lat/lng would require the Geocoding API — a second billable API, a second
-failure mode, and a second call on the path that is already the degraded one.
-Appending text costs nothing and reuses matching that is already being paid for.
-This is why Geocoding API stays disabled (§ 3.6).
+A named place is **not** geocoded into coordinates. That would require the
+Geocoding API — a second billable API and a second failure mode. Appending text
+costs nothing and reuses matching Places is already paid for. This is why
+Geocoding API stays disabled (§ 3.6).
 
 One naming trap worth recording: `navigator.geolocation` is the **browser's**
 W3C API — free, no key, unrelated to Google. Google's own **Geolocation API** is
@@ -234,21 +234,18 @@ WiFi signals. This project uses the former and must never enable the latter.
 
 ### 3.4 Cost per query
 
-| Component | Estimate |
-| --- | --- |
-| Places Text Search, Enterprise SKU | $0.035 |
-| LLM ranking — `claude-opus-5`, ~1.2K in / ~150 out | ~$0.010 |
-| **Total per recommendation** | **~$0.045** |
+| Component | List price | Actual, inside free tiers |
+| --- | --- | --- |
+| Places Text Search, Enterprise SKU | $0.035 | $0 (1,000/month free, capped at 30/day) |
+| LLM — `gemini-3.1-flash-lite`, up to 4 calls | — | $0 (Gemini free tier, 500 requests/day) |
+| **Total per recommendation** | | **$0** |
 
-The counterintuitive result: **Google is the expensive half, not the LLM** —
-roughly 3.5x. Optimization effort should go to reducing Places calls (cache,
-fixtures) before it goes anywhere near model choice.
-
-LLM pricing per 1M tokens: `claude-opus-5` $5 in / $25 out; `claude-sonnet-5`
-$2 / $10; `claude-haiku-4-5` $1 / $5. Default is `claude-opus-5` — at ~$0.01 per
-recommendation, downgrading to save a fraction of a cent is not worth the
-quality risk while the reason-sentence quality is still the open question.
-Revisit if M5's eval shows a cheaper model scores the same.
+Revised 2026-11-08: the LLM moved from `claude-opus-5` (~$0.01 per
+recommendation) to the Gemini free tier. Google remains the only component
+with a list price at all, so optimization effort still goes to reducing Places
+calls before anything else. Model choice within the free tier is decided by
+quota for now and by M5's eval later. Reasoning and the quota table are in
+DECISIONS.md § M4.0.
 
 Development-time spend control, in order of effect:
 
@@ -458,25 +455,47 @@ Replace the fixtures with live Places calls.
   `conftest.py`, so the suite can never spend. Still to confirm a day later:
   the Billing report shows the call under the Text Search Enterprise SKU at
   $0.
-- **M3.5** Browser geolocation: hidden lat/lng field, `locationBias` on the
-  request, fallback to the appended text location.
+- **M3.5** ➜ moved to M4.4 on 2026-11-08. With the location now possibly
+  coming from the sentence, which source wins is an LLM-layer question.
 - The incomplete-response path stays covered by the M2 fixtures.
 
-Exit: the same page, now backed by real restaurants near the user, with the API
-down — or geolocation refused — producing a clear message rather than a
-traceback.
+Exit (met, minus geolocation): the same page, backed by real restaurants, with
+the API down producing a clear message rather than a traceback.
 
 ### M4 — The LLM layer
 
-The riskiest milestone, isolated on purpose.
+The riskiest milestone, isolated on purpose. Scope widened on 2026-11-08 to
+include clarifying questions and location handling — see DECISIONS.md § M4.0.
 
-- Constraint extraction from the sentence.
-- Rank a top-3; show rank 1; hold 2 and 3 for "show me another."
-- Generate the reason sentence under the rule that it may cite only supported
-  conditions.
-- Handle malformed LLM output without crashing the request.
+- **M4.0** ✅ Scope and provider decisions recorded: Gemini free tier,
+  `gemini-3.1-flash-lite` over REST, clarifying questions capped at two,
+  location precedence, open-at-time checked in code. Key created in a separate
+  billing-free project and verified with a model listing.
+- **M4.1** Gemini client in `llm.py`: one REST call with JSON-schema output, a
+  response cache, a daily call cap, every failure funnelled into one exception,
+  tests that cannot reach the network. One real call.
+- **M4.2** Extraction: sentence (plus prior turns) → what to eat, where, when,
+  price, and what is still missing. Malformed or schema-invalid output handled
+  without crashing the request.
+- **M4.3** Clarifying loop: up to two follow-up questions, prior turns carried
+  in hidden form fields, server still stateless.
+- **M4.4** Location (was M3.5): browser geolocation → `locationBias`; a named
+  place → appended text; neither → ask, no Places call. The page says which
+  location it used.
+- **M4.5** Open at the requested time: `regularOpeningHours` added to the field
+  mask after re-checking its SKU, open-ness computed in code at request time.
+- **M4.6** LLM ranks the surviving candidates to a top-3 and writes the reason
+  sentence, citing only supported conditions.
+- **M4.7** The page states the rules the user is working with, next to the
+  input, for reference: naming a place helps (otherwise the current location
+  is used); saying when you plan to eat helps (otherwise now is assumed); the
+  app may ask up to two follow-up questions; without a place or a location
+  permission it will ask rather than guess. Written last, so it describes the
+  behaviour as built rather than as planned.
 
-Exit: for five hand-picked test sentences, the reason sentence references the
+Exit: for five hand-picked test sentences — including "in LA, heading to
+Boston" and one with geolocation refused — the app asks only what is actually
+missing, searches the right place, and the reason sentence references the
 actual conditions asked for and invents nothing.
 
 ### M5 — Evaluation and cost observability
@@ -499,9 +518,15 @@ Exit: a prompt change can be shown to improve or hurt the score, with evidence.
 - **`place_type` usefulness.** In the schema since M1, extracted by
   `parse_places`, but still has no consumer — M2's rule-based ranker ignores it.
   Decide by M4 or drop it.
-- **~~Geolocation fallback value.~~** Settled 2026-09-15: "Allston, Boston", as a
-  named constant in `find.py` rather than a `.env` variable. See § 3.3.
-- **Closed places ranked first.** The first live query, run at 22:30,
+- **~~Geolocation fallback value.~~** Settled 2026-09-15: "Allston, Boston".
+  Reversed 2026-11-08: there is no fallback location; the app asks instead.
+  See § 3.3.
+- **Place time zone.** Checking "open at 7pm" against weekly hours needs the
+  place's local time. Which field supplies it, and at which SKU, is open until
+  M4.5.
+- **~~Closed places ranked first.~~** Settled 2026-11-08: open-at-the-requested-time
+  is checked in code before ranking (M4.5). See DECISIONS.md § M4.0. Original
+  note: the first live query, run at 22:30,
   recommended a restaurant that was closed — and so was rank 2. The M2 ranker
   sorts on rating alone and ignores `open_now`, which the fixtures never made
   visible. Either a one-line rule change now or part of M4's constraint

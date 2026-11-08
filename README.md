@@ -3,10 +3,10 @@
 Describe what you want to eat in one sentence. Get back one restaurant
 and one line explaining why.
 
-**Status:** M3.4 done — the app now answers from the live Google Places
-API, behind a 24-hour cache and a 30/day call cap. First real call made
-2026-09-27. Next is M3.5, browser geolocation. Milestones live in
-[docs/PROJECT.md](docs/PROJECT.md) § 4.
+**Status:** M4.0 done — the LLM layer is scoped and the Gemini key is
+in place; no LLM code yet. The app answers from the live Google Places
+API, behind a 24-hour cache and a 30/day call cap. Next is M4.1, the
+Gemini client. Milestones live in [docs/PROJECT.md](docs/PROJECT.md) § 4.
 
 Set `find.USE_LIVE_API = False` to run on fixtures with no key and no
 cost. Tests always run on fixtures and never reach the network.
@@ -18,18 +18,25 @@ Anything outside this list goes to BACKLOG.md and does not get built.
 - Interface: a web page — FastAPI backend, server-rendered HTML
 - Input: a single natural-language sentence
 - Output: **one** restaurant, one sentence of reasoning
+- Clarification: if the sentence leaves out where or when, the app asks
+  — at most two follow-up questions, then it searches
+- Location: a place named in the sentence wins; otherwise the browser's
+  current location, and the page says so; if neither, the app asks
+- Time: now unless the user says otherwise; places closed at that time
+  are filtered out in code
 - Ranking: a top-3 is ranked internally; ranks 2 and 3 are held back for
-  a "show me another" action. A rule ranks them at M2, an LLM from M4
-- Conversation: none. Each request is one sentence in, one answer out.
-  The server holds no session state — the query and which candidate to
-  show both travel in the URL
+  a "show me another" action. A rule ranks them today, an LLM from M4
+- State: the server holds no session state — prior turns travel in
+  hidden form fields, which candidate to show in the URL
 - Data source: Google Places API (New), and nothing else
+- LLM: Gemini API free tier (`gemini-3.1-flash-lite`)
 
 ## Explicitly out of scope
 
 User accounts, saved favorites, maps, additional data sources,
-deployment, conversation history of any kind — including the app asking
-*you* a follow-up question — wait-time or queue-length features.
+deployment, open-ended conversation — refining a result after it is
+shown, or more than two follow-up questions — wait-time or queue-length
+features.
 
 ## Project type
 
@@ -48,10 +55,12 @@ uvicorn app:app --reload
 
 Then open http://127.0.0.1:8000
 
-No environment variables are needed yet. M2 runs entirely on the
-hand-written fixtures in `fixtures/`, so there is no API key, no network
-call, and no cost. `.env` becomes necessary at M3 — copy `.env.example`
-and fill it in then.
+Copy `.env.example` to `.env` and fill in both keys:
+`GOOGLE_PLACES_API_KEY` (Places, billing-linked project) and
+`GEMINI_API_KEY` (created in AI Studio in a **separate project with no
+billing**, so it stays on the free tier — see
+[docs/DECISIONS.md](docs/DECISIONS.md) § M4.0). Without keys, set
+`find.USE_LIVE_API = False` to run on fixtures.
 
 Tests:
 
