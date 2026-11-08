@@ -9,6 +9,7 @@ from fastapi.templating import Jinja2Templates
 
 import extract
 import find
+import hours
 from cache import BudgetUnreadable, DailyBudgetExceeded
 from find import PlacesUnavailable, parse_places, search_places
 from llm import LLMUnavailable
@@ -120,6 +121,7 @@ def home(
         "error": None,
         "detail": None,
         "searched": False,
+        "all_closed": False,
         "live": find.USE_LIVE_API,
     }
 
@@ -157,18 +159,24 @@ def home(
     context["searched"] = True
 
     try:
-        candidates = rank_places(
-            parse_places(
-                search_places(
-                    understood.search_text,
-                    location=understood.location,
-                    coords=coords,
-                )
+        places = parse_places(
+            search_places(
+                understood.search_text,
+                location=understood.location,
+                coords=coords,
             )
         )
     except _EXPECTED_FAILURES as exc:
         context.update(_failure(exc))
         return render()
+
+    # Open-ness is worked out now, for the time the user asked about, not
+    # read from the cache. Closed places are dropped by rank_places.
+    hours.annotate(places, understood.when, understood.day, understood.time)
+    when_label = hours.describe_when(understood.when, understood.day, understood.time)
+    candidates = rank_places(places)
+    context["all_closed"] = bool(places) and not candidates
+    context["when_label"] = when_label
 
     if candidates:
         rank = max(0, min(rank, len(candidates) - 1))
@@ -176,7 +184,7 @@ def home(
 
         context["rank"] = rank
         context["place"] = place
-        context["reason"] = build_reason(place)
+        context["reason"] = build_reason(place, when_label)
 
         if rank + 1 < len(candidates):
             # Same conversation, next candidate. Re-reading it is a cache

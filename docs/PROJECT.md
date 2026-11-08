@@ -36,10 +36,11 @@ sentence explaining why it fits what you asked for.
 **Status as of 2026-11-08:** M0–M2 done; M3.1–M3.4 done. The app answers
 from the live Places API, behind the 24-hour cache and the 30/day cap. 47
 passing tests, none of which touch the network. M3.5 (geolocation) folded
-into M4. M4.0–M4.4 done: the page reads the user's words through Gemini, asks up to
-two follow-up questions, and searches the place they named or, failing that,
-near the browser's position. 117 passing tests. Next: M4.5, opening hours,
-address and Maps link.
+into M4. M4.0–M4.5 done: the page reads the user's words through Gemini, asks up to
+two follow-up questions, searches the place they named or near the browser's
+position, drops places closed at the requested time, and shows the address
+with a Google Maps link. 146 passing tests. Next: M4.6, LLM ranking and a
+recommendation in the user's language.
 
 ### Shape (settled 2026-09-11, conversation and location rows revised 2026-11-08)
 
@@ -490,12 +491,15 @@ include clarifying questions and location handling — see DECISIONS.md § M4.0.
   named place → appended text, no bias; neither → ask, no Places call.
   Coordinates rounded to ~110 m. The page says when it searched near the user.
   `FALLBACK_LOCATION` removed.
-- **M4.5** Field mask and opening hours. Four fields join the mask together, so
+- **M4.5** ✅ Field mask and opening hours. Four fields join the mask together, so
   the SKU is re-checked once: `regularOpeningHours` (Enterprise) and
   `utcOffsetMinutes` for open-at-the-requested-time, computed in code at request
   time; `formattedAddress` and `googleMapsUri` (both Pro) so the card shows the
   address and links straight to the place in Google Maps. The call already bills
-  at Enterprise, so none of the four should change the price.
+  at Enterprise, so none of the four should change the price. Done: `hours.py`
+  computes open-at-time in the place's local time; closed places are dropped;
+  the Places cache key carries a field-mask fingerprint so old-shape entries
+  are never served.
 - **M4.6** LLM ranks the surviving candidates to a top-3 and writes a short
   recommendation — a few sentences, not one — **in the language the user wrote
   in**, citing only supported conditions.
@@ -534,9 +538,8 @@ Exit: a prompt change can be shown to improve or hurt the score, with evidence.
 - **~~Geolocation fallback value.~~** Settled 2026-09-15: "Allston, Boston".
   Reversed 2026-11-08: there is no fallback location; the app asks instead.
   See § 3.3.
-- **Place time zone.** Checking "open at 7pm" against weekly hours needs the
-  place's local time. Which field supplies it, and at which SKU, is open until
-  M4.5.
+- **~~Place time zone.~~** Settled 2026-11-08: `utcOffsetMinutes` (Pro), see
+  DECISIONS.md § M4.5.
 - **~~Closed places ranked first.~~** Settled 2026-11-08: open-at-the-requested-time
   is checked in code before ranking (M4.5). See DECISIONS.md § M4.0. Original
   note: the first live query, run at 22:30,

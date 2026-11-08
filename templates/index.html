@@ -48,6 +48,8 @@
       }
       .card h2 { margin: 0 0 0.4rem; font-size: 1.2rem; }
       .card p { margin: 0; color: #333; }
+      .card .address { color: #666; font-size: 0.9rem; margin: 0 0 0.6rem; }
+      .card .maps { display: inline-block; margin-top: 0.75rem; font-size: 0.9rem; }
       .more { display: inline-block; margin-top: 1rem; font-size: 0.9rem; }
       .empty { color: #666; }
       .chat { margin: 1.5rem 0 0; padding: 0; list-style: none; }
@@ -137,8 +139,14 @@
       {% if near_you %}<p class="assumption">{{ near_you }}</p>{% endif %}
       <div class="card">
         <h2>{{ place.name }}</h2>
+        {% if place.address %}<p class="address">{{ place.address }}</p>{% endif %}
         <p>{{ reason }}</p>
         {% for note in assumptions %}<p class="assumption">{{ note }}</p>{% endfor %}
+        {% if place.maps_url %}
+          <a class="maps" href="{{ place.maps_url }}" target="_blank" rel="noopener noreferrer"
+            >Open in Google Maps ↗</a
+          >
+        {% endif %}
       </div>
       {% if more_url %}
         <a class="more" href="{{ more_url }}">Not this one - show me another</a>
@@ -146,7 +154,11 @@
     {% elif searched %}
       <p class="understood">Searched for: {{ understood }}</p>
       {% if near_you %}<p class="assumption">{{ near_you }}</p>{% endif %}
-      <p class="empty">Nothing came back for that. Try different words.</p>
+      {% if all_closed %}
+        <p class="empty">Everything found is closed {{ when_label }}. Try another time or place.</p>
+      {% else %}
+        <p class="empty">Nothing came back for that. Try different words.</p>
+      {% endif %}
     {% endif %}
 
     <p class="stub">

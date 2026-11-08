@@ -13,6 +13,12 @@ def _must_not_be_called(query):
     raise AssertionError("_fetch_live was called when it should not have been")
 
 
+WEEKDAYS_11_TO_22 = [
+    {"open": {"day": d, "hour": 11, "minute": 0}, "close": {"day": d, "hour": 22, "minute": 0}}
+    for d in range(7)
+]
+
+
 def test_complete_record_maps_every_field():
     raw = [
         {
@@ -20,8 +26,11 @@ def test_complete_record_maps_every_field():
             "rating": 4.4,
             "userRatingCount": 812,
             "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
-            "currentOpeningHours": {"openNow": True},
+            "regularOpeningHours": {"periods": WEEKDAYS_11_TO_22},
+            "utcOffsetMinutes": -300,
             "primaryType": "chinese_restaurant",
+            "formattedAddress": "100 Harvard Ave, Allston, MA 02134, USA",
+            "googleMapsUri": "https://maps.google.com/?cid=123",
         }
     ]
 
@@ -31,8 +40,11 @@ def test_complete_record_maps_every_field():
             "rating": 4.4,
             "rating_count": 812,
             "price_level": "PRICE_LEVEL_INEXPENSIVE",
-            "open_now": True,
             "place_type": "chinese_restaurant",
+            "address": "100 Harvard Ave, Allston, MA 02134, USA",
+            "maps_url": "https://maps.google.com/?cid=123",
+            "periods": WEEKDAYS_11_TO_22,
+            "utc_offset_minutes": -300,
         }
     ]
 
@@ -51,21 +63,26 @@ def test_missing_fields_stay_none_and_are_not_coerced():
     assert place["rating"] is None
     assert place["rating_count"] is None
     assert place["price_level"] is None
-    assert place["open_now"] is None
+    assert place["periods"] is None
+    assert place["utc_offset_minutes"] is None
     assert place["place_type"] is None
+    assert place["address"] is None
+    assert place["maps_url"] is None
     # An unrated restaurant must stay distinguishable from a 0-rated one.
     assert place["rating"] != 0
 
 
-def test_open_now_false_is_kept_as_false_not_none():
-    raw = [
-        {
-            "displayName": {"text": "Union Square Spicy Pot"},
-            "currentOpeningHours": {"openNow": False},
-        }
-    ]
+def test_only_google_maps_links_are_kept():
+    def link(uri):
+        return parse_places([{"displayName": {"text": "x"}, "googleMapsUri": uri}])[0]["maps_url"]
 
-    assert parse_places(raw)[0]["open_now"] is False
+    assert link("https://maps.google.com/?cid=123") == "https://maps.google.com/?cid=123"
+    assert link("https://www.google.com/maps/place/?q=place_id:abc") is not None
+    # Autoescaping does not stop these in an href; the allowlist does.
+    assert link("javascript:alert(1)") is None
+    assert link("http://maps.google.com/?cid=123") is None
+    assert link("https://maps.google.com.evil.example/?cid=1") is None
+    assert link(42) is None
 
 
 def test_fixtures_parse_and_drop_the_nameless_one():
@@ -95,11 +112,11 @@ def test_live_path_counts_the_call_and_stores_the_response(monkeypatch):
     assert cache.calls_today() == 1
     # Stored under the composed query, place included - see
     # test_the_place_is_part_of_the_cache_key in test_places_api.py.
-    assert cache.get_cached("chinese food in Allston") == RAW_LIVE
+    assert cache.get_cached(find._plan("chinese food", "Allston", None)[2]) == RAW_LIVE
 
 
 def test_a_cache_hit_makes_no_call_and_costs_no_budget(monkeypatch):
-    cache.store("chinese food in Allston", RAW_LIVE)
+    cache.store(find._plan("chinese food", "Allston", None)[2], RAW_LIVE)
 
     monkeypatch.setattr(find, "USE_LIVE_API", True)
     monkeypatch.setattr(find, "_fetch_live", _must_not_be_called)

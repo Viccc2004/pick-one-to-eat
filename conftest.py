@@ -2,8 +2,11 @@
 
 import pytest
 
+from datetime import datetime, timezone
+
 import cache
 import find
+import hours
 
 
 @pytest.fixture(autouse=True)
@@ -48,3 +51,18 @@ def fake_api_keys(monkeypatch):
     """
     monkeypatch.setenv("GOOGLE_PLACES_API_KEY", "test-places-key")
     monkeypatch.setenv("GEMINI_API_KEY", "test-gemini-key")
+
+
+# Wednesday 2026-11-11, 12:30 in Boston (UTC-5). See the fixture comment.
+PINNED_NOW = datetime(2026, 11, 11, 17, 30, tzinfo=timezone.utc)
+
+
+@pytest.fixture(autouse=True)
+def pinned_clock(monkeypatch):
+    """Stop the clock, so "open right now" does not depend on when pytest runs.
+
+    Without this, a fixture place open 11:00-22:00 would pass the suite at
+    noon and fail it at midnight. Tests that need another moment patch
+    hours._now_utc themselves.
+    """
+    monkeypatch.setattr(hours, "_now_utc", lambda: PINNED_NOW)

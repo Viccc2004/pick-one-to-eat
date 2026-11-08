@@ -839,3 +839,68 @@ The script itself has no test — there is no browser in the test suite.
 The server side of every path it can produce (position, no position,
 nonsense position) is covered; the script is checked by hand in a
 browser.
+
+## M4.5 — 2026-11-08
+
+Opening hours computed per request, plus the address and a Google Maps
+link on the card.
+
+### Field mask: openNow out; weekly hours, offset, address, Maps link in
+`currentOpeningHours.openNow` is no longer requested. In its place:
+`regularOpeningHours.periods` (Enterprise) and `utcOffsetMinutes` (Pro)
+for computing open-ness, and `formattedAddress` and `googleMapsUri` (both
+Pro) for the card. Tiers checked on Google's Text Search (New) page on
+2026-11-08. The call already billed at Enterprise, so the price is
+unchanged. A test now fails if `currentOpeningHours` comes back.
+
+Weekly hours ignore holiday exceptions, which `currentOpeningHours`
+would have carried. Accepted: a stale "open" from the 24-hour cache is
+wrong every evening, while a holiday is wrong a few days a year, and
+the reason sentence still says "call ahead" whenever hours are unknown.
+
+### hours.py: open-ness is arithmetic, done per request
+`target_time` turns the request into (Google day, minute of day) in the
+**place's** local time — someone in LA asking about Boston "now" is
+asking about Boston's now. `is_open` checks the weekly periods,
+including the two shapes naive code gets wrong: a period that runs past
+midnight, and one that runs from Saturday night into Sunday (close day
+number smaller than open). A period with no close means 24 hours.
+
+Every answer is True, False or None, and None — no hours, no offset, no
+time given — is never treated as closed.
+
+### Closed is dropped; unknown is kept
+`rank_places` removes places closed at the requested time before
+ranking. If places came back but all were closed, the page says
+"Everything found is closed {then}" instead of "nothing came back" —
+those are different facts.
+
+### The cache key carries a fingerprint of the field mask
+Found before the first live call: entries cached under the old mask have
+no hours and no address, and would have been served for up to 24 hours,
+showing every place as "hours unknown". Every Places cache key now ends
+in a short hash of `FIELD_MASK`, so changing the mask retires old
+entries automatically rather than relying on someone remembering to
+delete `.cache/`.
+
+### Maps links: Google's hosts over https only
+Jinja escapes HTML, but a `javascript:` URL in an `href` is still live.
+`parse_places` keeps `googleMapsUri` only if it is https on a Google
+Maps host, and the link opens with `rel="noopener noreferrer"`.
+
+### The test clock is pinned
+`conftest.py` stops `hours._now_utc` at Wednesday 12:30 in Boston, and
+the fixtures have hours chosen around it: open places, two dinner-only
+places that are closed, a late-night one, and one with no hours at all.
+Without the pin, the suite would pass at noon and fail at midnight.
+
+### What the live call showed
+"ramen in Allston" on a Sunday at 15:37 Boston time: both places carried
+all nine fields; both open now and tomorrow at noon; both closed at
+04:00, which leaves an empty top three. The Maps links are
+`maps.google.com/?cid=...`, inside the allowlist.
+
+### Not handled: closing soon
+A place that closes at 19:15 counts as open at 19:00. Whether a meal
+needs a margin before closing is a judgement better made with M5's eval
+than guessed now.

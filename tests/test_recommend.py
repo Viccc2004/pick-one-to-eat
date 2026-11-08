@@ -3,13 +3,13 @@
 from recommend import build_reason, rank_places
 
 
-def _place(name, rating=None, count=None, price=None, open_now=None, ptype=None):
+def _place(name, rating=None, count=None, price=None, open_then=None, ptype=None):
     return {
         "name": name,
         "rating": rating,
         "rating_count": count,
         "price_level": price,
-        "open_now": open_now,
+        "open_then": open_then,
         "place_type": ptype,
     }
 
@@ -62,3 +62,25 @@ def test_place_with_no_usable_data_says_so():
     reason = build_reason(_place("Mystery Spot"))
 
     assert "No rating, price, or opening hours" in reason
+
+
+def test_a_place_closed_at_the_requested_time_is_dropped_however_good():
+    places = [
+        _place("Sichuan Garden House", 4.6, 1503, open_then=False),
+        _place("Golden Wok Allston", 4.4, 812, open_then=True),
+    ]
+
+    assert [p["name"] for p in rank_places(places)] == ["Golden Wok Allston"]
+
+
+def test_unknown_hours_are_not_treated_as_closed():
+    places = [_place("Corner Dumpling Counter", 4.7, 289, open_then=None)]
+
+    assert len(rank_places(places)) == 1
+
+
+def test_reason_names_the_time_that_was_checked():
+    place = _place("Golden Wok Allston", 4.4, 812, open_then=True)
+
+    assert "open tomorrow at 19:00" in build_reason(place, "tomorrow at 19:00")
+    assert "open right now" in build_reason(place)

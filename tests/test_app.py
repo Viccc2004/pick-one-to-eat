@@ -120,6 +120,69 @@ def test_show_me_another_link_carries_the_whole_conversation():
     assert params["rank"] == ["1"]
 
 
+# --- opening hours, address, Maps link (M4.5) ------------------------------------
+# The clock is pinned in conftest.py to Wednesday 12:30 in Boston.
+
+
+def test_the_card_shows_the_address_and_a_maps_link():
+    response = client.get("/", params={"q": "chinese now"})
+
+    assert "1 Packard&#39;s Corner, Allston" in response.text
+    assert 'href="https://maps.google.com/?cid=' in response.text
+    assert 'rel="noopener noreferrer"' in response.text
+
+
+def only_fixture(monkeypatch, *names):
+    """Serve just the named fixture places, to set up one situation exactly."""
+    every = find._fetch_fixtures()
+    keep = [p for p in every if p.get("displayName", {}).get("text") in names]
+    monkeypatch.setattr(find, "_fetch_fixtures", lambda: keep)
+
+
+def test_a_place_without_a_maps_link_gets_no_link(monkeypatch):
+    only_fixture(monkeypatch, "New Dragon Kitchen")
+
+    response = client.get("/", params={"q": "chinese now"})
+
+    assert "New Dragon Kitchen" in response.text
+    assert "Open in Google Maps" not in response.text
+
+
+def test_a_dinner_only_place_is_not_offered_for_lunch():
+    for rank in range(3):
+        response = client.get("/", params={"q": "chinese now", "rank": rank})
+        assert "Harvard Ave Hot Pot" not in response.text
+        assert "Union Square Spicy Pot" not in response.text
+
+
+def test_the_reason_names_the_time_that_was_checked(gemini, monkeypatch):
+    only_fixture(monkeypatch, "Sichuan Garden House")
+    gemini.reply = understood(when="later", day="today", time="19:00")
+
+    response = client.get("/", params={"q": "chinese at 7"})
+
+    assert "open today at 19:00" in response.text
+
+
+def test_a_late_night_place_comes_back_late_at_night(gemini):
+    # 23:30: the 11-22 and 11-23 places are shut; the one open 18:00-03:00
+    # is not, and neither is the one with unknown hours.
+    gemini.reply = understood(when="later", day="today", time="23:30")
+
+    names = [client.get("/", params={"q": "chinese late", "rank": r}).text for r in range(3)]
+
+    assert any("Allston Late Night Kitchen" in text for text in names)
+    assert not any("Sichuan Garden House" in text for text in names)
+
+
+def test_everything_closed_says_so(gemini, monkeypatch):
+    only_fixture(monkeypatch, "Harvard Ave Hot Pot", "Union Square Spicy Pot")
+
+    response = client.get("/", params={"q": "chinese now"})
+
+    assert "Everything found is closed right now" in response.text
+
+
 # --- the clarifying loop --------------------------------------------------------
 
 

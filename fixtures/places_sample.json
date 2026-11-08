@@ -1,79 +1,915 @@
 {
-  "_comment": "Hand-written fixtures in raw Google Places API (New) shape. NOT a recorded API response - see docs/DECISIONS.md. Every missing-field case from the M1 schema is represented at least once.",
+  "_comment": "Hand-written fixtures in raw Google Places API (New) shape. NOT a recorded API response - see docs/DECISIONS.md. Every missing-field case from the schema is represented at least once. Hours are chosen so that at the tests' pinned clock (Wednesday 12:30 in Boston, see conftest.py) some places are open, two dinner-only ones and the late-night one are closed, and one has no hours at all.",
   "places": [
     {
-      "displayName": { "text": "Golden Wok Allston", "languageCode": "en" },
+      "displayName": {
+        "text": "Golden Wok Allston",
+        "languageCode": "en"
+      },
       "rating": 4.4,
       "userRatingCount": 812,
       "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
-      "currentOpeningHours": { "openNow": true },
-      "primaryType": "chinese_restaurant"
+      "primaryType": "chinese_restaurant",
+      "regularOpeningHours": {
+        "periods": [
+          {
+            "open": {
+              "day": 0,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 0,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 1,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 1,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 2,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 2,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 3,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 3,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 4,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 4,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 5,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 5,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 6,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 6,
+              "hour": 22,
+              "minute": 0
+            }
+          }
+        ]
+      },
+      "utcOffsetMinutes": -300,
+      "formattedAddress": "100 Harvard Ave, Allston, MA 02134, USA",
+      "googleMapsUri": "https://maps.google.com/?cid=1000"
     },
     {
-      "displayName": { "text": "Sichuan Garden House", "languageCode": "en" },
+      "displayName": {
+        "text": "Sichuan Garden House",
+        "languageCode": "en"
+      },
       "rating": 4.6,
       "userRatingCount": 1503,
       "priceLevel": "PRICE_LEVEL_MODERATE",
-      "currentOpeningHours": { "openNow": true },
-      "primaryType": "chinese_restaurant"
+      "primaryType": "chinese_restaurant",
+      "regularOpeningHours": {
+        "periods": [
+          {
+            "open": {
+              "day": 0,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 0,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 1,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 1,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 2,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 2,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 3,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 3,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 4,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 4,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 5,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 5,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 6,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 6,
+              "hour": 22,
+              "minute": 0
+            }
+          }
+        ]
+      },
+      "utcOffsetMinutes": -300,
+      "formattedAddress": "200 Brighton Ave, Allston, MA 02134, USA",
+      "googleMapsUri": "https://maps.google.com/?cid=1001"
     },
     {
-      "displayName": { "text": "Brighton Ave Noodle Bar", "languageCode": "en" },
+      "displayName": {
+        "text": "Brighton Ave Noodle Bar",
+        "languageCode": "en"
+      },
       "rating": 4.9,
       "userRatingCount": 3,
       "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
-      "currentOpeningHours": { "openNow": true },
-      "primaryType": "noodle_shop"
+      "primaryType": "noodle_shop",
+      "regularOpeningHours": {
+        "periods": [
+          {
+            "open": {
+              "day": 0,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 0,
+              "hour": 21,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 1,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 1,
+              "hour": 21,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 2,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 2,
+              "hour": 21,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 3,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 3,
+              "hour": 21,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 4,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 4,
+              "hour": 21,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 5,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 5,
+              "hour": 21,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 6,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 6,
+              "hour": 21,
+              "minute": 0
+            }
+          }
+        ]
+      },
+      "utcOffsetMinutes": -300,
+      "formattedAddress": "150 Brighton Ave, Allston, MA 02134, USA",
+      "googleMapsUri": "https://maps.google.com/?cid=1002"
     },
     {
-      "displayName": { "text": "New Dragon Kitchen", "languageCode": "en" },
+      "displayName": {
+        "text": "New Dragon Kitchen",
+        "languageCode": "en"
+      },
       "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
-      "currentOpeningHours": { "openNow": true },
-      "primaryType": "chinese_restaurant"
+      "primaryType": "chinese_restaurant",
+      "regularOpeningHours": {
+        "periods": [
+          {
+            "open": {
+              "day": 0,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 0,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 1,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 1,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 2,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 2,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 3,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 3,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 4,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 4,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 5,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 5,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 6,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 6,
+              "hour": 22,
+              "minute": 0
+            }
+          }
+        ]
+      },
+      "utcOffsetMinutes": -300
     },
     {
-      "displayName": { "text": "Harvard Ave Hot Pot", "languageCode": "en" },
+      "displayName": {
+        "text": "Harvard Ave Hot Pot",
+        "languageCode": "en"
+      },
       "rating": 4.2,
       "userRatingCount": 640,
-      "currentOpeningHours": { "openNow": false },
-      "primaryType": "restaurant"
+      "primaryType": "restaurant",
+      "regularOpeningHours": {
+        "periods": [
+          {
+            "open": {
+              "day": 0,
+              "hour": 17,
+              "minute": 0
+            },
+            "close": {
+              "day": 0,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 1,
+              "hour": 17,
+              "minute": 0
+            },
+            "close": {
+              "day": 1,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 2,
+              "hour": 17,
+              "minute": 0
+            },
+            "close": {
+              "day": 2,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 3,
+              "hour": 17,
+              "minute": 0
+            },
+            "close": {
+              "day": 3,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 4,
+              "hour": 17,
+              "minute": 0
+            },
+            "close": {
+              "day": 4,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 5,
+              "hour": 17,
+              "minute": 0
+            },
+            "close": {
+              "day": 5,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 6,
+              "hour": 17,
+              "minute": 0
+            },
+            "close": {
+              "day": 6,
+              "hour": 22,
+              "minute": 0
+            }
+          }
+        ]
+      },
+      "utcOffsetMinutes": -300,
+      "formattedAddress": "120 Harvard Ave, Allston, MA 02134, USA",
+      "googleMapsUri": "https://maps.google.com/?cid=1004"
     },
     {
-      "displayName": { "text": "Corner Dumpling Counter", "languageCode": "en" },
+      "displayName": {
+        "text": "Corner Dumpling Counter",
+        "languageCode": "en"
+      },
       "rating": 4.7,
       "userRatingCount": 289,
       "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
-      "primaryType": "chinese_restaurant"
+      "primaryType": "chinese_restaurant",
+      "utcOffsetMinutes": -300,
+      "formattedAddress": "1 Packard's Corner, Allston, MA 02134, USA",
+      "googleMapsUri": "https://maps.google.com/?cid=1005"
     },
     {
-      "displayName": { "text": "Packard's Corner Grill", "languageCode": "en" },
+      "displayName": {
+        "text": "Packard's Corner Grill",
+        "languageCode": "en"
+      },
       "rating": 3.8,
       "userRatingCount": 155,
       "priceLevel": "PRICE_LEVEL_EXPENSIVE",
-      "currentOpeningHours": { "openNow": true }
+      "regularOpeningHours": {
+        "periods": [
+          {
+            "open": {
+              "day": 0,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 0,
+              "hour": 23,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 1,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 1,
+              "hour": 23,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 2,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 2,
+              "hour": 23,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 3,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 3,
+              "hour": 23,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 4,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 4,
+              "hour": 23,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 5,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 5,
+              "hour": 23,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 6,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 6,
+              "hour": 23,
+              "minute": 0
+            }
+          }
+        ]
+      },
+      "utcOffsetMinutes": -300,
+      "formattedAddress": "2 Packard's Corner, Allston, MA 02134, USA",
+      "googleMapsUri": "https://maps.google.com/?cid=1006"
     },
     {
       "rating": 4.5,
       "userRatingCount": 430,
       "priceLevel": "PRICE_LEVEL_MODERATE",
-      "currentOpeningHours": { "openNow": true },
-      "primaryType": "chinese_restaurant"
+      "primaryType": "chinese_restaurant",
+      "regularOpeningHours": {
+        "periods": [
+          {
+            "open": {
+              "day": 0,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 0,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 1,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 1,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 2,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 2,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 3,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 3,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 4,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 4,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 5,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 5,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 6,
+              "hour": 11,
+              "minute": 0
+            },
+            "close": {
+              "day": 6,
+              "hour": 22,
+              "minute": 0
+            }
+          }
+        ]
+      },
+      "utcOffsetMinutes": -300
     },
     {
-      "displayName": { "text": "Union Square Spicy Pot", "languageCode": "en" },
+      "displayName": {
+        "text": "Union Square Spicy Pot",
+        "languageCode": "en"
+      },
       "rating": 4.1,
       "userRatingCount": 97,
       "priceLevel": "PRICE_LEVEL_MODERATE",
-      "currentOpeningHours": { "openNow": false },
-      "primaryType": "chinese_restaurant"
+      "primaryType": "chinese_restaurant",
+      "regularOpeningHours": {
+        "periods": [
+          {
+            "open": {
+              "day": 0,
+              "hour": 17,
+              "minute": 0
+            },
+            "close": {
+              "day": 0,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 1,
+              "hour": 17,
+              "minute": 0
+            },
+            "close": {
+              "day": 1,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 2,
+              "hour": 17,
+              "minute": 0
+            },
+            "close": {
+              "day": 2,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 3,
+              "hour": 17,
+              "minute": 0
+            },
+            "close": {
+              "day": 3,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 4,
+              "hour": 17,
+              "minute": 0
+            },
+            "close": {
+              "day": 4,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 5,
+              "hour": 17,
+              "minute": 0
+            },
+            "close": {
+              "day": 5,
+              "hour": 22,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 6,
+              "hour": 17,
+              "minute": 0
+            },
+            "close": {
+              "day": 6,
+              "hour": 22,
+              "minute": 0
+            }
+          }
+        ]
+      },
+      "utcOffsetMinutes": -300,
+      "formattedAddress": "50 Union Sq, Allston, MA 02134, USA",
+      "googleMapsUri": "https://maps.google.com/?cid=1008"
     },
     {
-      "displayName": { "text": "Allston Late Night Kitchen", "languageCode": "en" },
+      "displayName": {
+        "text": "Allston Late Night Kitchen",
+        "languageCode": "en"
+      },
       "rating": 4.0,
       "userRatingCount": 1120,
       "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
-      "currentOpeningHours": { "openNow": true },
-      "primaryType": "chinese_restaurant"
+      "primaryType": "chinese_restaurant",
+      "regularOpeningHours": {
+        "periods": [
+          {
+            "open": {
+              "day": 0,
+              "hour": 18,
+              "minute": 0
+            },
+            "close": {
+              "day": 1,
+              "hour": 3,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 1,
+              "hour": 18,
+              "minute": 0
+            },
+            "close": {
+              "day": 2,
+              "hour": 3,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 2,
+              "hour": 18,
+              "minute": 0
+            },
+            "close": {
+              "day": 3,
+              "hour": 3,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 3,
+              "hour": 18,
+              "minute": 0
+            },
+            "close": {
+              "day": 4,
+              "hour": 3,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 4,
+              "hour": 18,
+              "minute": 0
+            },
+            "close": {
+              "day": 5,
+              "hour": 3,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 5,
+              "hour": 18,
+              "minute": 0
+            },
+            "close": {
+              "day": 6,
+              "hour": 3,
+              "minute": 0
+            }
+          },
+          {
+            "open": {
+              "day": 6,
+              "hour": 18,
+              "minute": 0
+            },
+            "close": {
+              "day": 0,
+              "hour": 3,
+              "minute": 0
+            }
+          }
+        ]
+      },
+      "utcOffsetMinutes": -300,
+      "formattedAddress": "300 Cambridge St, Allston, MA 02134, USA",
+      "googleMapsUri": "https://maps.google.com/?cid=1009"
     }
   ]
 }
