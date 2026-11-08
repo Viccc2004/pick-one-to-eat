@@ -64,6 +64,7 @@ SCHEMA = {
         "day": {"type": ["string", "null"], "enum": [*DAYS, None]},
         "time": {"type": ["string", "null"]},
         "price": {"type": ["string", "null"], "enum": [*PRICES, None]},
+        "language": {"type": "string"},
         "ask_location": {"type": "string"},
         "ask_when": {"type": "string"},
         "ask_time": {"type": "string"},
@@ -75,6 +76,7 @@ SCHEMA = {
         "day",
         "time",
         "price",
+        "language",
         "ask_location",
         "ask_when",
         "ask_time",
@@ -106,6 +108,8 @@ case. If they gave a time but no day, "today". Otherwise null.
 a clock time, use {meal_times}. null if they gave neither.
 - price: "cheap", "moderate" or "expensive" if they said anything about \
 price, else null.
+- language: the language the user writes in, as its English name \
+("English", "Chinese", "Spanish").
 
 Always write all three of these, whatever the conversation already says. \
 Each is one short, friendly question in the language the user wrote in:
@@ -142,6 +146,7 @@ class Request:
     missing: tuple[str, ...]
     question: str | None
     assumptions: tuple[str, ...] = ()
+    language: str | None = None
 
 
 def build_prompt(turns: list[tuple[str, str]]) -> str:
@@ -174,6 +179,19 @@ def _one_of(value, allowed: list[str]) -> str | None:
     return value if value in allowed else None
 
 
+def _language(value) -> str | None:
+    """A language name short enough to be one; anything else is unknown.
+
+    It goes into the ranking prompt as "Write in: ...", so it is kept to
+    letters and spaces - a field the model fills must not become a way to
+    smuggle instructions into the next prompt.
+    """
+    value = _str_or_none(value)
+    if value is None or len(value) > 30 or not re.fullmatch(r"[A-Za-z ]+", value):
+        return None
+    return value.title()
+
+
 def _clean(answer: dict) -> dict:
     """Coerce each field on its own; a bad field becomes unknown.
 
@@ -204,6 +222,7 @@ def _clean(answer: dict) -> dict:
         "day": day,
         "time": time,
         "price": _one_of(answer.get("price"), PRICES),
+        "language": _language(answer.get("language")),
         "asks": {
             item: _str_or_none(answer.get(f"ask_{item}"))
             for item in ("location", "when", "time")
@@ -287,6 +306,7 @@ def extract(turns: list[tuple[str, str]], has_browser_location: bool) -> Request
         day=fields["day"],
         time=fields["time"],
         price=fields["price"],
+        language=fields["language"],
         missing=missing,
         question=_question(missing, fields["asks"]),
         assumptions=assumptions,

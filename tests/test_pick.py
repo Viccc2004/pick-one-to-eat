@@ -57,7 +57,8 @@ def test_prompt_carries_the_words_the_time_and_only_known_facts(gemini):
     assert "User: 想吃火锅，今晚7点" in prompt
     assert "They want to eat: today at 19:00" in prompt
     assert "[1] name: A Hot Pot; type: chinese restaurant; rating: 4.6 from 1503 reviews; price: mid-priced; open today at 19:00: yes" in prompt
-    assert "[2] name: Mystery; type: chinese restaurant; rating: unknown; open today at 19:00: unknown" in prompt
+    assert "[2] name: Mystery; type: chinese restaurant; rating: unknown; price: unknown; open today at 19:00: unknown" in prompt
+    assert "Budget they named" not in prompt
     assert gemini.sent["schema"] is pick.SCHEMA
 
 
@@ -213,3 +214,106 @@ def test_an_answer_without_picks_falls_back(gemini):
     _, note = choose()
 
     assert note == pick.FALLBACK_NOTE
+
+
+# --- a stated budget is enforced, an unstated one ignored (M4.8) ----------------
+
+CHEAP, MID, DEAR = "PRICE_LEVEL_INEXPENSIVE", "PRICE_LEVEL_MODERATE", "PRICE_LEVEL_EXPENSIVE"
+
+
+def priced(*levels):
+    """One place per level, named by position and level."""
+    return [place(f"P{i} {lvl}", price=lvl) for i, lvl in enumerate(levels)]
+
+
+def names(chosen):
+    return [p["name"] for p in chosen]
+
+
+def test_no_budget_means_price_changes_nothing(gemini):
+    gemini.reply = {"picks": [{"id": 1, "reason": "a"}, {"id": 2, "reason": "b"}, {"id": 3, "reason": "c"}]}
+
+    chosen, _ = pick.choose(TURNS, WHEN, priced(DEAR, MID, CHEAP))
+
+    assert names(chosen) == ["P0 PRICE_LEVEL_EXPENSIVE", "P1 PRICE_LEVEL_MODERATE", "P2 PRICE_LEVEL_INEXPENSIVE"]
+    assert all(p["price_note"] is None for p in chosen)
+
+
+def test_the_budget_is_in_the_prompt_and_matches_are_listed_first(gemini):
+    pick.choose(TURNS, WHEN, priced(MID, CHEAP, None), price="cheap")
+
+    prompt = gemini.sent["prompt"]
+    assert "Budget they named: cheap" in prompt
+    # matching, then unknown, then other - the order the LLM is told to keep
+    assert prompt.index("P1 PRICE_LEVEL_INEXPENSIVE") < prompt.index("P2 None") < prompt.index("P0 PRICE_LEVEL_MODERATE")
+
+
+def test_with_three_matches_other_prices_are_not_offered_at_all(gemini):
+    pick.choose(TURNS, WHEN, priced(MID, CHEAP, CHEAP, DEAR, CHEAP), price="cheap")
+
+    prompt = gemini.sent["prompt"]
+    assert "MODERATE" not in prompt
+    assert "PRICE_LEVEL_EXPENSIVE" not in prompt
+
+
+def test_strict_cheap_does_not_stretch_to_mid_priced():
+    assert pick._tier(place("x", price=MID), "cheap") == 2
+    assert pick._tier(place("x", price="PRICE_LEVEL_FREE"), "cheap") == 0
+    assert pick._tier(place("x", price="PRICE_LEVEL_VERY_EXPENSIVE"), "expensive") == 0
+
+
+def test_the_llm_cannot_rank_a_mismatch_above_a_match(gemini):
+    # Fewer than three cheap places, so mid-priced ones are offered to make
+    # up the numbers - but the model put one first.
+    gemini.reply = {"picks": [{"id": 3, "reason": "mid"}, {"id": 1, "reason": "cheap"}]}
+
+    chosen, _ = pick.choose(TURNS, WHEN, priced(CHEAP, MID, MID), price="cheap")
+
+    assert names(chosen)[0] == "P0 PRICE_LEVEL_INEXPENSIVE"
+
+
+def test_a_mismatch_always_carries_a_note_from_the_code(gemini):
+    # Whatever the model wrote, the page says the price is off.
+    gemini.reply = {"picks": [{"id": 1, "reason": "Great!"}, {"id": 2, "reason": "Also great!"}]}
+
+    chosen, _ = pick.choose(TURNS, WHEN, priced(CHEAP, MID), price="cheap")
+
+    assert chosen[0]["price_note"] is None
+    assert chosen[1]["price_note"] == "You asked for cheap; this one is mid-priced."
+
+
+def test_unknown_price_says_so():
+    note = pick.price_note(place("x", price=None), "expensive")
+
+    assert note == "You asked for expensive; this place's price level is unknown."
+
+
+def test_the_rules_fallback_honours_the_budget_too(gemini):
+    gemini.reply = llm.LLMUnavailable("down")
+    places = [
+        place("Dear and great", 4.9, 900, price=DEAR),
+        place("Cheap and fine", 4.1, 300, price=CHEAP),
+    ]
+
+    chosen, note = pick.choose(TURNS, WHEN, places, price="cheap")
+
+    assert names(chosen) == ["Cheap and fine", "Dear and great"]
+    assert chosen[1]["price_note"] == "You asked for cheap; this one is expensive."
+    assert note == pick.FALLBACK_NOTE
+
+
+# --- the reason's language is named, not guessed ---------------------------------
+
+
+def test_the_language_is_named_in_the_prompt(gemini):
+    # Live: "便宜点的火锅" came back in English. The facts and the budget
+    # line are English, and the model followed them instead of the user.
+    pick.choose(TURNS, WHEN, PLACES, language="Chinese")
+
+    assert "Write in: Chinese" in gemini.sent["prompt"]
+
+
+def test_no_language_no_line(gemini):
+    pick.choose(TURNS, WHEN, PLACES)
+
+    assert "Write in" not in gemini.sent["prompt"]

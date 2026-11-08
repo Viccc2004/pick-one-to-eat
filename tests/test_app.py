@@ -268,6 +268,20 @@ def test_an_llm_list_does_not_carry_the_rules_flag(gemini):
     assert "by=rules" not in response.text
 
 
+def test_the_budget_match_comes_first_and_a_mismatch_is_flagged(gemini):
+    # Fixtures at the pinned clock: Packard's Corner Grill is the only open
+    # expensive place, so it leads despite its 3.8; rank 2 is a make-weight
+    # and says so.
+    gemini.reply = understood(price="expensive")
+
+    first = client.get("/", params={"q": "fancy chinese now"}).text
+    second = client.get("/", params={"q": "fancy chinese now", "rank": 1}).text
+
+    assert "Packard&#39;s Corner Grill" in first
+    assert "You asked for expensive" not in first
+    assert "You asked for expensive" in second
+
+
 # --- the usage rules (M4.7) ------------------------------------------------------
 
 

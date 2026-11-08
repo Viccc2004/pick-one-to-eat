@@ -1066,3 +1066,45 @@ explains:
 - Price named → places at that level go first; places with unknown
   price after them; places at another level last, and only if fewer than
   three match. A reason for a place that does not match must say so.
+
+## M4.8 — 2026-11-08
+
+A stated budget is enforced; an unstated one is ignored.
+
+### Strict levels, decided by the user
+"Cheap" is `INEXPENSIVE` (and `FREE`); "mid-priced" is `MODERATE`;
+"expensive" is `EXPENSIVE` or `VERY_EXPENSIVE`. Cheap does not stretch to
+mid-priced. Chosen over a loose reading because a place that misses the
+budget can still be shown — it just has to say so.
+
+### The code orders, the LLM explains, the code has the last word
+With a budget named, every candidate gets a tier: matches, unknown price,
+other price. Tiers go to the model in that order, and places at another
+price are offered at all only when fewer than three match. After the
+model picks, a stable sort by tier is applied: within a tier the model's
+order stands, but it cannot put a mismatch above a match. The rules
+fallback ranks one tier at a time, so the budget holds without Gemini.
+
+### A mismatch is always flagged by the code
+The prompt tells the model to say when a pick misses the budget, and on
+the live run it did. But that is a request, not a guarantee, so the card
+also carries a code-written line — "You asked for cheap; this one is
+mid-priced." — or, for unknown price, "this place's price level is
+unknown". The same pattern as the near-you note: anything the user asked
+for and did not get is stated by code, not left to the model.
+
+### Live: Allston has no cheap or expensive hot pot
+All ten open hot pot places near Allston are `MODERATE` in Google's data.
+"便宜点的火锅" and "贵一点的火锅" therefore both returned mid-priced places,
+each flagged, each reason saying the price did not fit. Correct, and a
+reminder that the app can only be as specific as Google's price levels.
+
+### The reason's language is named, not guessed
+Found in the same run: "便宜点的火锅" got its reasons in English. The
+prompt's facts and budget line are English, and the model followed them
+rather than the user. Extraction now also returns `language` ("Chinese"),
+and the ranking prompt carries "Write in: Chinese". The field is kept to
+letters and spaces, at most 30 characters, before it is pasted into the
+next prompt — a value the model wrote must not become a way to inject
+instructions into another call. After the fix: Chinese in, Chinese out;
+English in, English out.

@@ -123,8 +123,9 @@
           {% for meal, time in meal_times.items() %}{{ meal }} {{ time }}{% if not loop.last %}, {% endif %}{% endfor %}.
         </li>
         <li>
-          <strong>Budget:</strong> say "cheap" or "fancy" and it is taken into
-          account; say nothing and price is ignored.
+          <strong>Budget:</strong> say "cheap", "mid-priced" or "fancy" and places
+          at that price come first; others appear only to make up three, and are
+          marked. Say nothing and price is ignored.
         </li>
         <li>
           <strong>It may ask up to {{ max_questions }} follow-up questions.</strong>
@@ -184,6 +185,7 @@
         <h2>{{ place.name }}</h2>
         {% if place.address %}<p class="address">{{ place.address }}</p>{% endif %}
         <p class="reason">{{ reason }}</p>
+        {% if place.price_note %}<p class="assumption">{{ place.price_note }}</p>{% endif %}
         {% if fallback_note %}<p class="assumption">{{ fallback_note }}</p>{% endif %}
         {% for note in assumptions %}<p class="assumption">{{ note }}</p>{% endfor %}
         {% if place.maps_url %}

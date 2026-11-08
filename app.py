@@ -181,7 +181,12 @@ def home(
     hours.annotate(places, understood.when, understood.day, understood.time)
     when_label = hours.describe_when(understood.when, understood.day, understood.time)
     candidates, context["fallback_note"] = pick.choose(
-        turns, when_label, places, use_llm=by != "rules"
+        turns,
+        when_label,
+        places,
+        price=understood.price,
+        use_llm=by != "rules",
+        language=understood.language,
     )
     context["all_closed"] = bool(places) and not candidates
     context["when_label"] = when_label
