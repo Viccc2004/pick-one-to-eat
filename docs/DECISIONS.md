@@ -904,3 +904,39 @@ all nine fields; both open now and tomorrow at noon; both closed at
 A place that closes at 19:15 counts as open at 19:00. Whether a meal
 needs a margin before closing is a judgement better made with M5's eval
 than guessed now.
+
+### Follow-up 2026-11-08: a 503 is retried too, on a fallback model
+Found in the user's first browser test: `下周五晚上，在波士顿，找一个火锅店`
+came back "Gemini returned 503: This model is currently experiencing high
+demand", with Google's raw JSON on the page.
+
+Probing at that moment: `gemini-3.1-flash-lite` 503 on every call;
+`gemini-3.8-flash` 503; `gemini-2.5-flash-lite` 404, no longer offered to
+new users; `gemini-3-flash-preview` and `gemini-3.5-flash-lite` both 200 in
+about a second. Overload is per model, so retrying the same model mostly
+retries the same refusal.
+
+Changed, superseding the M4.3 "only a timeout is retried":
+
+- A 503 is retryable, like a timeout. Still one retry, still counted,
+  still under the cap.
+- The retry goes to `FALLBACK_MODEL = "gemini-3.5-flash-lite"`, not the
+  primary again. A first attempt with a 2-second pause before retrying
+  the same model was written and dropped once the probe showed a
+  different model answering immediately.
+- A fallback answer is cached under the same key as a primary one, so a
+  repeat of the question does not go back to the overloaded model.
+  Accepted cost for M5: an eval run must start from an empty Gemini cache
+  if it is meant to measure one model.
+- A 503 that survives the retry says "Gemini is overloaded right now
+  (503). This is usually brief - try again in a minute." instead of
+  Google's JSON.
+
+The same sentence then worked: `hot pot · Boston · friday at 19:00` →
+Qiao Lin Hotpot, address and Maps link, in 16.6s — slow, because the
+primary still failed first. Whether to make `gemini-3.5-flash-lite` the
+primary depends on its free-tier daily limit, not yet read from AI Studio.
+
+Known: "下周五" (Friday next week) is read as the next Friday. The hours
+check is per weekday, so the answer is the same, and the page names the
+weekday rather than a date, so it does not mislead.

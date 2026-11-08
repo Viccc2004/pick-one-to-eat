@@ -184,7 +184,7 @@ def test_two_timeouts_give_up(api_key, post):
     with pytest.raises(LLMUnavailable, match="did not answer"):
         llm.generate_json("dumplings", SCHEMA)
 
-    assert len(post.calls) == 1 + llm.TIMEOUT_RETRIES
+    assert len(post.calls) == 1 + llm.RETRIES
     assert cache.calls_today(api="gemini") == 2
 
 
@@ -198,6 +198,47 @@ def test_the_retry_respects_the_cap(api_key, post, monkeypatch):
         llm.generate_json("dumplings", SCHEMA)
 
     assert len(post.calls) == 1
+
+
+def test_an_overloaded_model_is_retried_once_on_the_fallback(api_key, post):
+    # Seen live on 2026-11-08: "This model is currently experiencing high
+    # demand. Spikes in demand are usually temporary."
+    post.replies += [FakeResponse(status_code=503, text="UNAVAILABLE"), gemini_says('{"location": null}')]
+
+    assert llm.generate_json("dumplings", SCHEMA) == {"location": None}
+    assert llm.MODEL in post.calls[0]["url"]
+    assert llm.FALLBACK_MODEL in post.calls[1]["url"]
+    assert cache.calls_today(api="gemini") == 2
+
+
+def test_a_timeout_is_retried_on_the_fallback_too(api_key, post):
+    post.replies += [requests.Timeout("read timed out"), gemini_says('{"location": null}')]
+
+    llm.generate_json("dumplings", SCHEMA)
+
+    assert llm.FALLBACK_MODEL in post.calls[1]["url"]
+
+
+def test_a_fallback_answer_is_reused_from_the_cache(api_key, post):
+    # Going back to the overloaded primary for the same question would
+    # spend a call to get a refusal.
+    post.replies += [FakeResponse(status_code=503, text="UNAVAILABLE"), gemini_says('{"location": "Boston"}')]
+
+    llm.generate_json("heading to Boston", SCHEMA)
+    again = llm.generate_json("heading to Boston", SCHEMA)
+
+    assert again == {"location": "Boston"}
+    assert len(post.calls) == 2
+
+
+def test_overloaded_twice_gives_a_plain_message(api_key, post):
+    post.replies += [FakeResponse(status_code=503, text="UNAVAILABLE")] * 2
+
+    with pytest.raises(LLMUnavailable, match="overloaded right now") as caught:
+        llm.generate_json("dumplings", SCHEMA)
+
+    # The page shows this text; raw JSON from Google is not a sentence.
+    assert "{" not in str(caught.value)
 
 
 def test_other_failures_are_not_retried(api_key, post):

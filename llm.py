@@ -26,6 +26,12 @@ load_dotenv()
 # models. See docs/DECISIONS.md § M4.0.
 MODEL = "gemini-3.1-flash-lite"
 
+# Where the one retry goes. On 2026-11-08 the primary answered 503 "high
+# demand" to every call for a stretch, while this one answered in 0.7s:
+# overload is per model, so retrying the same model mostly retries the
+# same refusal. Pinned for the same reason as MODEL.
+FALLBACK_MODEL = "gemini-3.5-flash-lite"
+
 GENERATE_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 )
@@ -37,10 +43,16 @@ GENERATE_URL = (
 # the old single timeout. See docs/DECISIONS.md § M4.3.
 REQUEST_TIMEOUT_SECONDS = 15
 
-# Only a timeout is retried. A 429, a 500, a blocked prompt or malformed
-# JSON would most likely fail the same way again, and each retry is a
-# counted call.
-TIMEOUT_RETRIES = 1
+# Two failures are retried, once each request: a timeout, and a 503
+# "model is currently experiencing high demand" - Google's own words are
+# "spikes in demand are usually temporary". A 429 (quota), a 500, a
+# blocked prompt or malformed JSON would most likely fail the same way
+# again, and each retry is a counted call. See docs/DECISIONS.md § M4.5
+# follow-up.
+RETRIES = 1
+
+# Attempt n uses MODELS[n]: the primary first, the fallback for the retry.
+MODELS = [MODEL, FALLBACK_MODEL]
 
 API = "gemini"
 
@@ -49,14 +61,14 @@ class LLMUnavailable(Exception):
     """Any reason Gemini did not produce a usable JSON object."""
 
 
-class _TimedOut(LLMUnavailable):
-    """The one failure worth a retry. Callers only ever see the parent."""
+class _Transient(LLMUnavailable):
+    """A failure worth one retry. Callers only ever see the parent."""
 
 
 def _cache_key(prompt: str, schema: dict, system: str | None) -> str:
     """Hash of everything that can change the answer.
 
-    The model is in the key so that changing MODEL cannot serve an answer
+    The primary model is in the key so that changing MODEL cannot serve an answer
     written by the old one. A hash keeps the cache file readable and the
     key short however long the prompt gets.
     """
@@ -110,11 +122,13 @@ def _extract_text(body: dict) -> str:
     return text
 
 
-def _fetch_live(api_key: str, prompt: str, schema: dict, system: str | None) -> dict:
+def _fetch_live(
+    api_key: str, prompt: str, schema: dict, system: str | None, model: str = MODEL
+) -> dict:
     """One generateContent call. Every failure becomes LLMUnavailable."""
     try:
         response = requests.post(
-            GENERATE_URL.format(model=MODEL),
+            GENERATE_URL.format(model=model),
             # The key goes in a header, never the URL, so it cannot end up
             # in an error message or a log line that quotes the URL.
             headers={"Content-Type": "application/json", "x-goog-api-key": api_key},
@@ -122,7 +136,7 @@ def _fetch_live(api_key: str, prompt: str, schema: dict, system: str | None) -> 
             timeout=REQUEST_TIMEOUT_SECONDS,
         )
     except requests.Timeout as exc:
-        raise _TimedOut(
+        raise _Transient(
             f"Gemini did not answer within {REQUEST_TIMEOUT_SECONDS}s"
         ) from exc
     except requests.RequestException as exc:
@@ -132,6 +146,11 @@ def _fetch_live(api_key: str, prompt: str, schema: dict, system: str | None) -> 
         raise LLMUnavailable(
             "Gemini's free-tier limit is used up for now (429). The daily "
             "limit resets at midnight Pacific time."
+        )
+    if response.status_code == 503:
+        raise _Transient(
+            "Gemini is overloaded right now (503). This is usually brief - "
+            "try again in a minute."
         )
     if response.status_code != 200:
         raise LLMUnavailable(
@@ -161,9 +180,11 @@ def generate_json(prompt: str, schema: dict, system: str | None = None) -> dict:
 
     Order, as in find.search_places: cache, then key, then budget, then
     count, then call. The key is checked before counting so a missing
-    .env entry does not burn the day's budget. A timed-out call is retried
-    once, and the retry passes the budget check and is counted like any
-    other call. Only a parsed, valid answer is cached - a malformed one
+    .env entry does not burn the day's budget. A timeout or a 503 is
+    retried once, on FALLBACK_MODEL, and the retry passes the budget check
+    and is counted like any other call. A fallback answer is cached under
+    the same key as a primary one: it answers the same question, and the
+    next identical request should not go back to an overloaded model. Only a parsed, valid answer is cached - a malformed one
     must not be served back for 24 hours.
 
     Raises LLMUnavailable, cache.DailyBudgetExceeded, or
@@ -181,13 +202,13 @@ def generate_json(prompt: str, schema: dict, system: str | None = None) -> dict:
             "GEMINI_API_KEY is not set. Copy .env.example to .env and fill it in."
         )
 
-    for attempt in range(1 + TIMEOUT_RETRIES):
+    for attempt in range(1 + RETRIES):
         cache.check_daily_budget(api=API)
         cache.record_call(api=API)
         try:
-            answer = _fetch_live(api_key, prompt, schema, system)
-        except _TimedOut:
-            if attempt == TIMEOUT_RETRIES:
+            answer = _fetch_live(api_key, prompt, schema, system, MODELS[attempt])
+        except _Transient:
+            if attempt == RETRIES:
                 raise
             continue
         cache.store(key, answer, api=API)
