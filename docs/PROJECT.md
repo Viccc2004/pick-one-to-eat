@@ -49,7 +49,7 @@ tests. Next: M4.4, browser geolocation.
 | Location | A place named in the sentence > the browser's current location > ask. The page says which one it used |
 | Time | Now by default; a later time if the user gives one. Open-at-that-time is checked in code |
 | Ranking | LLM ranks a top-3 internally |
-| Output | **One** restaurant shown, with one sentence of reasoning |
+| Output | **One** restaurant: name, address, a Google Maps link, and a short recommendation in the user's language |
 | Held back | Ranks 2 and 3 are kept for a "show me another" action |
 | State | The server is stateless: prior turns travel in hidden form fields, the candidate index in the URL |
 | Interface | Web page — FastAPI backend, server-rendered HTML, no JS framework |
@@ -488,10 +488,15 @@ include clarifying questions and location handling — see DECISIONS.md § M4.0.
 - **M4.4** Location (was M3.5): browser geolocation → `locationBias`; a named
   place → appended text; neither → ask, no Places call. The page says which
   location it used.
-- **M4.5** Open at the requested time: `regularOpeningHours` added to the field
-  mask after re-checking its SKU, open-ness computed in code at request time.
-- **M4.6** LLM ranks the surviving candidates to a top-3 and writes the reason
-  sentence, citing only supported conditions.
+- **M4.5** Field mask and opening hours. Four fields join the mask together, so
+  the SKU is re-checked once: `regularOpeningHours` (Enterprise) and
+  `utcOffsetMinutes` for open-at-the-requested-time, computed in code at request
+  time; `formattedAddress` and `googleMapsUri` (both Pro) so the card shows the
+  address and links straight to the place in Google Maps. The call already bills
+  at Enterprise, so none of the four should change the price.
+- **M4.6** LLM ranks the surviving candidates to a top-3 and writes a short
+  recommendation — a few sentences, not one — **in the language the user wrote
+  in**, citing only supported conditions.
 - **M4.7** The page states the rules the user is working with, next to the
   input, for reference: naming a place helps (otherwise the current location
   is used); saying when you plan to eat helps (otherwise now is assumed); the

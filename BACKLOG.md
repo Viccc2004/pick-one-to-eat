@@ -9,7 +9,6 @@ Adding to this file is free. Building from it is not.
   never assigned to a milestone and would have landed on M4, already the
   riskiest one. Not to be confused with M4's clarifying questions (moved
   into v1 on 2026-11-08), which happen *before* the answer and stop at two
-- Reconsider address (or lat/lng) in the internal schema if the output ever needs to tell the user how to get there
 - Add `reviews` / `editorialSummary` to the field mask so reasoning can
   cite dish-level evidence — costs the Enterprise + Atmosphere SKU
 - Deployment: put it on a real URL instead of localhost

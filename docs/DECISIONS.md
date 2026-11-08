@@ -772,3 +772,25 @@ another" → Hokkaido Ramen Santouka, with no new calls.
 `想吃饺子，我现在在LA，明天晚饭去Boston吃` → `dumplings · Boston ·
 tomorrow at 19:00` → Dumpling center, no question asked. Four requests,
 8.3s in total, three Gemini calls and two Places calls.
+
+## Scope addition — 2026-11-08
+
+### The card shows the address and a Google Maps link
+Supersedes § Dropped: formattedAddress (M1) and removes the BACKLOG entry
+that waited for exactly this. Getting to the place is part of acting on
+the answer. `formattedAddress` and `googleMapsUri` are both Text Search
+Pro fields (checked against Google's Text Search (New) page on
+2026-11-08), and the call already bills at Enterprise because of
+`rating` and friends, so adding them costs nothing. Done in M4.5, with
+the other field mask change, so the SKU is checked once.
+
+`googleMapsUri` is used rather than building a Maps URL by hand: it is
+Google's own link to the exact place, not a search that could land on
+a namesake.
+
+### The recommendation is a short paragraph in the user's language
+Widens M4.6 from "one sentence" to a few sentences, written in whatever
+language the user wrote in — a Chinese request gets a Chinese reason.
+The rule that it may cite only supported conditions is unchanged; more
+sentences means more room to invent, which M4.6's tests and M5's eval
+have to watch.
