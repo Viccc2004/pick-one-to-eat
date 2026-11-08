@@ -156,6 +156,58 @@ def test_empty_llm_question_falls_back_to_a_template(gemini):
     assert req.question == "Are you eating now or later?"
 
 
+# --- the two-question cap ------------------------------------------------------
+
+def after_questions(n, last="ramen"):
+    """A conversation in which the app has already asked n questions."""
+    turns = []
+    for i in range(n):
+        turns += [("user", f"answer {i}"), ("app", f"question {i}")]
+    return turns + [("user", last)]
+
+
+def test_below_the_cap_the_app_keeps_asking(gemini):
+    gemini.reply = answer(when="unknown")
+
+    req = extract.extract(after_questions(extract.MAX_QUESTIONS - 1), True)
+
+    assert req.missing == ("when",)
+    assert req.assumptions == ()
+
+
+def test_at_the_cap_an_unknown_time_becomes_now_and_says_so(gemini):
+    gemini.reply = answer(when="unknown")
+
+    req = extract.extract(after_questions(extract.MAX_QUESTIONS), True)
+
+    assert req.when == "now"
+    assert req.missing == ()
+    assert req.question is None
+    assert any("assumes you're eating now" in a for a in req.assumptions)
+
+
+def test_at_the_cap_a_later_meal_without_a_time_is_searched_but_flagged(gemini):
+    gemini.reply = answer(when="later", day="tomorrow", time=None)
+
+    req = extract.extract(after_questions(extract.MAX_QUESTIONS), True)
+
+    # No honest default for "tomorrow, some time": search anyway, and say
+    # the hours were not checked rather than inventing a time.
+    assert (req.when, req.day, req.time) == ("later", "tomorrow", None)
+    assert req.missing == ()
+    assert any("call ahead" in a for a in req.assumptions)
+
+
+def test_location_is_never_assumed_even_past_the_cap(gemini):
+    gemini.reply = answer(when="unknown")
+
+    req = extract.extract(after_questions(extract.MAX_QUESTIONS + 3), False)
+
+    assert req.missing == ("location",)
+    assert req.question == "Where do you want to eat?"
+    assert req.when == "now"
+
+
 # --- bad fields degrade to "not said", never to a crash or a guess --------------
 
 

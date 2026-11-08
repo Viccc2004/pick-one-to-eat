@@ -711,3 +711,64 @@ sentence for that.
 Seven new prompts, twice: 0.8–3.7s mostly, one 10.8s, one 16.2s, and one
 more 30s timeout. Two timeouts in fourteen calls. Whether to retry once
 on timeout is M4.3's decision, where a person is actually waiting.
+
+## M4.3 — 2026-11-08
+
+The clarifying loop on the page. `app.py` now sends every submitted
+sentence through `extract.extract` first; a request with gaps gets a
+question, a complete one gets searched.
+
+### Timeout 15 seconds, retried once
+Chosen over showing a "try again" message. Two of fourteen M4.2 calls
+hung past 30s while most answered in 1–4s: a hung call rarely recovers,
+and a fresh one usually answers quickly. Worst case is 2 × 15s = 30s,
+no worse than the old single timeout.
+
+Only a timeout is retried. A 429, a 500, a blocked prompt or malformed
+JSON would most likely fail the same way again. The retry passes the
+budget check and is counted like any other call — this is the
+difference from the SDK's automatic retries rejected in § M4.0, which
+would have spent quota where the counter cannot see it.
+
+### The question count is read off the conversation
+`extract` counts the "app" turns in what it is given; there is no
+separate counter to carry or to get out of step. At two questions it
+stops asking:
+
+- when still unknown → now, with a sentence on the page saying so;
+- a later meal still without a time → searched anyway, with a sentence
+  saying opening hours could not be checked. There is no honest default
+  time for "tomorrow, some time";
+- no place and no browser location → still asked, past the cap. With
+  nothing to search near, asking is the only honest move.
+
+### The conversation travels in repeated `t` fields, by GET
+Prior turns go back to the server as hidden `<input name="t">` fields,
+oldest first, alternating user and app. The form stays GET, so "show me
+another" is still a plain link: it carries the same `t` fields, the same
+`q`, and `rank + 1`. Re-reading the conversation is a cache hit in both
+Gemini and Places — verified live, neither counter moved when paging.
+
+A hand-edited odd-length history drops its trailing entry rather than
+erroring. User text is HTML-escaped by Jinja's autoescape (checked: it
+is on for `.html` templates in Starlette), and a test pins that.
+
+### The page states what it searched for
+Every result carries a line like `dumplings · Boston · tomorrow at
+19:00`, and every assumption made after the cap is printed under the
+card. Nothing the app filled in on the user's behalf is silent. This is
+the "tell the user the default" requirement, applied before M4.4 adds
+the default that needs it most ("near you").
+
+### No browser location until M4.4
+`HAS_BROWSER_LOCATION` is `False`, so a request that names no place is
+always asked where. That is exactly the location-refused path, so it is
+the first one built.
+
+### What the live run showed
+`I want ramen` → "Where would you like to eat? Are you planning to eat
+now or later?" → `in Allston, right now` → Isshindo Ramen; "show me
+another" → Hokkaido Ramen Santouka, with no new calls.
+`想吃饺子，我现在在LA，明天晚饭去Boston吃` → `dumplings · Boston ·
+tomorrow at 19:00` → Dumpling center, no question asked. Four requests,
+8.3s in total, three Gemini calls and two Places calls.

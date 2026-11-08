@@ -30,17 +30,27 @@ GENERATE_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 )
 
-# Free-tier latency measured 2026-11-08 swung from 0.8s to 16.9s on the
-# same request, and one call timed out at 20s - the variance is Google's,
-# not the prompt's. 30s covers what was seen; a timed-out call has still
-# been counted against the day's cap.
-REQUEST_TIMEOUT_SECONDS = 30
+# Free-tier latency measured 2026-11-08: most calls 1-4s, a long tail to
+# 17s, and two of fourteen hung past 30s. A hung call rarely recovers, and
+# a fresh one usually answers in seconds, so the wait is cut short and
+# retried once rather than sat out. Worst case 2 x 15s = 30s, the same as
+# the old single timeout. See docs/DECISIONS.md § M4.3.
+REQUEST_TIMEOUT_SECONDS = 15
+
+# Only a timeout is retried. A 429, a 500, a blocked prompt or malformed
+# JSON would most likely fail the same way again, and each retry is a
+# counted call.
+TIMEOUT_RETRIES = 1
 
 API = "gemini"
 
 
 class LLMUnavailable(Exception):
     """Any reason Gemini did not produce a usable JSON object."""
+
+
+class _TimedOut(LLMUnavailable):
+    """The one failure worth a retry. Callers only ever see the parent."""
 
 
 def _cache_key(prompt: str, schema: dict, system: str | None) -> str:
@@ -111,6 +121,10 @@ def _fetch_live(api_key: str, prompt: str, schema: dict, system: str | None) -> 
             json=_request_body(prompt, schema, system),
             timeout=REQUEST_TIMEOUT_SECONDS,
         )
+    except requests.Timeout as exc:
+        raise _TimedOut(
+            f"Gemini did not answer within {REQUEST_TIMEOUT_SECONDS}s"
+        ) from exc
     except requests.RequestException as exc:
         raise LLMUnavailable(f"Could not reach Gemini: {exc}") from exc
 
@@ -147,9 +161,10 @@ def generate_json(prompt: str, schema: dict, system: str | None = None) -> dict:
 
     Order, as in find.search_places: cache, then key, then budget, then
     count, then call. The key is checked before counting so a missing
-    .env entry does not burn the day's budget. Only a parsed, valid
-    answer is cached - a malformed one must not be served back for 24
-    hours.
+    .env entry does not burn the day's budget. A timed-out call is retried
+    once, and the retry passes the budget check and is counted like any
+    other call. Only a parsed, valid answer is cached - a malformed one
+    must not be served back for 24 hours.
 
     Raises LLMUnavailable, cache.DailyBudgetExceeded, or
     cache.BudgetUnreadable.
@@ -166,8 +181,14 @@ def generate_json(prompt: str, schema: dict, system: str | None = None) -> dict:
             "GEMINI_API_KEY is not set. Copy .env.example to .env and fill it in."
         )
 
-    cache.check_daily_budget(api=API)
-    cache.record_call(api=API)
-    answer = _fetch_live(api_key, prompt, schema, system)
-    cache.store(key, answer, api=API)
-    return answer
+    for attempt in range(1 + TIMEOUT_RETRIES):
+        cache.check_daily_budget(api=API)
+        cache.record_call(api=API)
+        try:
+            answer = _fetch_live(api_key, prompt, schema, system)
+        except _TimedOut:
+            if attempt == TIMEOUT_RETRIES:
+                raise
+            continue
+        cache.store(key, answer, api=API)
+        return answer

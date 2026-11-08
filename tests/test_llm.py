@@ -170,14 +170,43 @@ def test_network_error(api_key, post):
         llm.generate_json("dumplings", SCHEMA)
 
 
-def test_timeout_still_counts_against_the_cap(api_key, post):
-    # It may have been served; the spend guard assumes the worst.
-    post.replies.append(requests.Timeout("read timed out"))
+def test_a_timeout_is_retried_once_and_both_attempts_count(api_key, post):
+    post.replies += [requests.Timeout("read timed out"), gemini_says('{"location": null}')]
+
+    assert llm.generate_json("dumplings", SCHEMA) == {"location": None}
+    # The hung call may still have been served; the spend guard assumes so.
+    assert cache.calls_today(api="gemini") == 2
+
+
+def test_two_timeouts_give_up(api_key, post):
+    post.replies += [requests.Timeout("read timed out"), requests.Timeout("again")]
+
+    with pytest.raises(LLMUnavailable, match="did not answer"):
+        llm.generate_json("dumplings", SCHEMA)
+
+    assert len(post.calls) == 1 + llm.TIMEOUT_RETRIES
+    assert cache.calls_today(api="gemini") == 2
+
+
+def test_the_retry_respects_the_cap(api_key, post, monkeypatch):
+    # The first attempt uses the last unit of budget; the retry must not
+    # quietly go one over.
+    monkeypatch.setattr(cache, "MAX_GEMINI_CALLS_PER_DAY", 1)
+    post.replies += [requests.Timeout("read timed out"), gemini_says('{"location": null}')]
+
+    with pytest.raises(cache.DailyBudgetExceeded):
+        llm.generate_json("dumplings", SCHEMA)
+
+    assert len(post.calls) == 1
+
+
+def test_other_failures_are_not_retried(api_key, post):
+    post.replies += [FakeResponse(status_code=500, text="internal")]
 
     with pytest.raises(LLMUnavailable):
         llm.generate_json("dumplings", SCHEMA)
 
-    assert cache.calls_today(api="gemini") == 1
+    assert len(post.calls) == 1
 
 
 def test_free_tier_limit_429_gets_its_own_message(api_key, post):

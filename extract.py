@@ -33,6 +33,11 @@ PRICES = ["cheap", "moderate", "expensive"]
 
 WHENS = ["now", "later", "unknown"]
 
+# How many follow-up questions the app may ask before it stops asking and
+# assumes. Enforced here, not left to the prompt. See docs/DECISIONS.md
+# § Clarifying questions move into v1, capped at two.
+MAX_QUESTIONS = 2
+
 # What the search falls back to when the user named no food. Food is not
 # something the app asks about: "somewhere to eat near me" is a complete
 # request. Only where and when are worth a follow-up question.
@@ -111,7 +116,8 @@ class Request:
     """What the user wants, as far as the conversation says.
 
     `missing` and `question` are decided by code. An empty `missing` means
-    the request is ready to search.
+    the request is ready to search. `assumptions` lists, as sentences for
+    the page, every gap the app filled itself once it stopped asking.
     """
 
     search_text: str
@@ -122,6 +128,7 @@ class Request:
     price: str | None
     missing: tuple[str, ...]
     question: str | None
+    assumptions: tuple[str, ...] = ()
 
 
 def build_prompt(turns: list[tuple[str, str]]) -> str:
@@ -217,8 +224,36 @@ def _question(missing: tuple[str, ...], asks: dict) -> str | None:
     return " ".join(parts)
 
 
+def _stop_asking(fields: dict, missing: tuple[str, ...]) -> tuple[dict, tuple, tuple]:
+    """Fill what can be assumed once the question budget is spent.
+
+    When to eat becomes now, and the page says so. A later meal with no
+    time stays without one: there is no honest default, so opening hours
+    for it simply go unchecked, and the page says that instead. Location
+    is the one thing never assumed - with no place and no browser
+    location there is nothing to search, so it stays missing and keeps
+    being asked. See docs/DECISIONS.md § Location: named place > browser
+    location > ask.
+    """
+    fields = dict(fields)
+    assumptions = []
+    if "when" in missing:
+        fields["when"] = "now"
+        assumptions.append("You didn't say when, so this assumes you're eating now.")
+    if "time" in missing:
+        assumptions.append(
+            "You didn't give a time, so opening hours couldn't be checked - "
+            "call ahead."
+        )
+    still_missing = tuple(m for m in missing if m == "location")
+    return fields, still_missing, tuple(assumptions)
+
+
 def extract(turns: list[tuple[str, str]], has_browser_location: bool) -> Request:
     """Read the conversation and return what the user wants.
+
+    The number of questions already asked is read off the conversation
+    itself - one per "app" turn - so the cap needs no state of its own.
 
     Raises llm.LLMUnavailable, cache.DailyBudgetExceeded or
     cache.BudgetUnreadable - the web layer turns each into a sentence.
@@ -226,6 +261,11 @@ def extract(turns: list[tuple[str, str]], has_browser_location: bool) -> Request
     answer = llm.generate_json(build_prompt(turns), SCHEMA, system=SYSTEM)
     fields = _clean(answer)
     missing = find_missing(fields, has_browser_location)
+
+    assumptions: tuple[str, ...] = ()
+    questions_asked = sum(1 for speaker, _ in turns if speaker == "app")
+    if missing and questions_asked >= MAX_QUESTIONS:
+        fields, missing, assumptions = _stop_asking(fields, missing)
 
     return Request(
         search_text=fields["search_text"],
@@ -236,4 +276,5 @@ def extract(turns: list[tuple[str, str]], has_browser_location: bool) -> Request
         price=fields["price"],
         missing=missing,
         question=_question(missing, fields["asks"]),
+        assumptions=assumptions,
     )

@@ -3,11 +3,11 @@
 Describe what you want to eat in one sentence. Get back one restaurant
 and one line explaining why.
 
-**Status:** M4.2 done — `extract.py` reads the user's words through
-Gemini (free tier) and returns what to search, where, when, and what is
-still missing; the page does not use it yet. The app answers from the
-live Google Places API, behind a 24-hour cache and a 30/day call cap.
-Next is M4.3, asking the follow-up questions on the page. Milestones live in [docs/PROJECT.md](docs/PROJECT.md) § 4.
+**Status:** M4.3 done — the page reads your sentence through Gemini
+(free tier), asks up to two follow-up questions if where or when is
+missing, then searches the live Google Places API and shows one
+restaurant. Ranking and the reason are still placeholder rules. Next is
+M4.4, using the browser's location when you don't name a place. Milestones live in [docs/PROJECT.md](docs/PROJECT.md) § 4.
 
 Set `find.USE_LIVE_API = False` to run on fixtures with no key and no
 cost. Tests always run on fixtures and never reach the network.

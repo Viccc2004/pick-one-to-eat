@@ -36,9 +36,9 @@ sentence explaining why it fits what you asked for.
 **Status as of 2026-11-08:** M0–M2 done; M3.1–M3.4 done. The app answers
 from the live Places API, behind the 24-hour cache and the 30/day cap. 47
 passing tests, none of which touch the network. M3.5 (geolocation) folded
-into M4. M4.0 (scope and provider decisions), M4.1 (the Gemini client) and M4.2
-(extraction) done; 85 passing tests. Next: M4.3, the clarifying loop on the
-page.
+into M4. M4.0–M4.3 done: the page reads the user's words through Gemini, asks up to
+two follow-up questions, and searches the place they named. 104 passing
+tests. Next: M4.4, browser geolocation.
 
 ### Shape (settled 2026-09-11, conversation and location rows revised 2026-11-08)
 
@@ -481,8 +481,10 @@ include clarifying questions and location handling — see DECISIONS.md § M4.0.
   now/later + day + time, price; code decides what is missing and which of the
   LLM's three pre-written questions to show. Bad fields degrade to "not said"
   one at a time. 18 tests; seven live trial sentences all correct.
-- **M4.3** Clarifying loop: up to two follow-up questions, prior turns carried
-  in hidden form fields, server still stateless.
+- **M4.3** ✅ Clarifying loop: up to two follow-up questions, prior turns carried
+  in hidden `t` fields by GET, server still stateless; past the cap, "when"
+  defaults to now and says so, "where" keeps being asked. The page states what
+  it searched for. Gemini timeouts cut to 15s and retried once.
 - **M4.4** Location (was M3.5): browser geolocation → `locationBias`; a named
   place → appended text; neither → ask, no Places call. The page says which
   location it used.
