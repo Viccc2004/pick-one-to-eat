@@ -1006,3 +1006,63 @@ reason said it was "mid-priced rather than cheap" — the honest answer.
   runs, because the primary model was slow or failing before the
   fallback answered. Making `gemini-3.5-flash-lite` the primary is the
   likely fix, pending its free-tier limit.
+
+## M4.7 and the M4 exit check — 2026-11-08
+
+### The usage rules are rendered from the code's own constants
+A "How it works" panel next to the input: name a place or it searches
+near you; say when, and what each meal word means; budget words are
+considered; at most N follow-up questions; closed places are skipped;
+the reason uses only Google's facts. Open on the empty page, folded away
+once there is a question or a result.
+
+The question cap and the meal times on the page come from
+`extract.MAX_QUESTIONS` and the new `extract.MEAL_TIMES`, which also
+builds the extraction prompt — moved there from prose inside the prompt,
+with the prompt text checked byte-identical so no cache entry was lost.
+A test changes both constants and checks the page follows. The page
+cannot describe a rule the code does not run.
+
+### Exit check: five sentences, live
+1. "I'm in LA … flying to Boston tomorrow, want dumplings for dinner
+   there", LA coordinates → no question; `dumplings · Boston · tomorrow
+   at 19:00`; three Boston-area dumpling places.
+2. "ramen", no location → asked where and when together; "Cambridge,
+   right now" → three Cambridge ramen places.
+3. "cheap hot pot", Allston coordinates → asked only when; "tonight at
+   8" → three hot pot places near the user, with the near-you note.
+4. "想吃寿司，周六中午，在Back Bay", no location → no question; three
+   sushi places, reasons in Chinese.
+5. "somewhere fancy for dinner tomorrow", Allston coordinates → no
+   question; an expensive Korean barbecue place first, with a reason
+   saying it fits "somewhere fancy".
+
+Asking only what is missing and searching the right place: met in all
+five. No invented number in any reason.
+
+Two bugs found and fixed in the run:
+
+- **Paging mixed two rankings.** In case 4 the ranking call failed on
+  page 1 and the rules answered; page 2 re-ran the pipeline, Gemini
+  succeeded, and its different order showed page 1's place again. A
+  failed call is not cached, so nothing tied the pages together. A list
+  produced by the rules now carries `by=rules` in its "show me another"
+  link, and later pages stay on the rules.
+- **The number guard rejected a correct reason** for "B2J Tasty Pot"
+  because of the 2 in its own name. Digits in the place's name are now
+  allowed numbers.
+
+Not met: in cases 3 and 5 the user named a budget, and two of three
+picks were mid-priced with reasons that did not say so. Price is in the
+prompt but nothing enforces it. That is M4.8.
+
+### M4.8 planned: a stated budget is enforced, an unstated one ignored
+Requested 2026-11-08: "cheap hot pot" and "fancy hot pot" should give
+different answers; with no budget named, price should not matter.
+Plan, in the same spirit as opening hours — the code decides, the LLM
+explains:
+
+- No price named → price plays no part in ranking, as now.
+- Price named → places at that level go first; places with unknown
+  price after them; places at another level last, and only if fewer than
+  three match. A reason for a place that does not match must say so.

@@ -95,6 +95,7 @@ def home(
     rank: int = 0,
     lat: str = "",
     lng: str = "",
+    by: str = "",
 ):
     """Render the form, a follow-up question, or a single result.
 
@@ -124,6 +125,10 @@ def home(
         "all_closed": False,
         "fallback_note": None,
         "live": find.USE_LIVE_API,
+        # The usage rules on the page are built from the same constants the
+        # code runs on, so the page cannot describe a rule that is not real.
+        "max_questions": extract.MAX_QUESTIONS,
+        "meal_times": extract.MEAL_TIMES,
     }
 
     def render():
@@ -175,7 +180,9 @@ def home(
     # read from the cache. Closed places never reach the ranking.
     hours.annotate(places, understood.when, understood.day, understood.time)
     when_label = hours.describe_when(understood.when, understood.day, understood.time)
-    candidates, context["fallback_note"] = pick.choose(turns, when_label, places)
+    candidates, context["fallback_note"] = pick.choose(
+        turns, when_label, places, use_llm=by != "rules"
+    )
     context["all_closed"] = bool(places) and not candidates
     context["when_label"] = when_label
 
@@ -194,6 +201,9 @@ def home(
             params = [("t", text) for text in t] + [("q", q), ("rank", rank + 1)]
             if coords is not None:
                 params += [("lat", coords[0]), ("lng", coords[1])]
+            if context["fallback_note"]:
+                # Keep paging the list this page came from.
+                params.append(("by", "rules"))
             context["more_url"] = "/?" + urlencode(params)
 
     return render()

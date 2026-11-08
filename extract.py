@@ -43,6 +43,16 @@ MAX_QUESTIONS = 2
 # request. Only where and when are worth a follow-up question.
 DEFAULT_SEARCH_TEXT = "restaurant"
 
+# The one gap the LLM is told to fill. Defined once here: the prompt and
+# the page's usage rules are both built from it, so they cannot disagree.
+MEAL_TIMES = {
+    "breakfast": "08:00",
+    "brunch": "11:00",
+    "lunch": "12:00",
+    "dinner": "19:00",
+    "late night": "22:00",
+}
+
 _TIME_RE = re.compile(r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
 
 SCHEMA = {
@@ -93,8 +103,7 @@ time or day; "unknown" if they did not say.
 - day: only when "later": "today", "tomorrow", or a weekday name in lower \
 case. If they gave a time but no day, "today". Otherwise null.
 - time: only when "later": 24-hour "HH:MM". If they named a meal instead of \
-a clock time, use breakfast 08:00, brunch 11:00, lunch 12:00, dinner 19:00, \
-late night 22:00. null if they gave neither.
+a clock time, use {meal_times}. null if they gave neither.
 - price: "cheap", "moderate" or "expensive" if they said anything about \
 price, else null.
 
@@ -103,7 +112,9 @@ Each is one short, friendly question in the language the user wrote in:
 - ask_location: asks where they want to eat.
 - ask_when: asks whether they want to eat now or later.
 - ask_time: asks what time they plan to eat.
-"""
+""".format(
+    meal_times=", ".join(f"{meal} {time}" for meal, time in MEAL_TIMES.items())
+)
 
 # Used for any item whose LLM-written question came back empty.
 _FALLBACK_QUESTIONS = {

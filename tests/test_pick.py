@@ -125,6 +125,24 @@ def test_an_invented_number_replaces_the_reason_with_the_template(gemini):
     assert chosen[0]["reason"] == build_reason(PLACES[0], WHEN)
 
 
+def test_digits_in_the_name_are_not_a_claim():
+    # Live: "B2J Tasty Pot ... 4.9 rating from 455 reviews" was rejected for
+    # the 2 in its own name.
+    b2j = place("B2J Tasty Pot", 4.9, 455)
+
+    assert pick.numbers_are_supported("B2J Tasty Pot has 4.9 from 455 reviews.", b2j, WHEN)
+    assert not pick.numbers_are_supported("B2J Tasty Pot is 2 minutes away.", place("Plain"), WHEN)
+
+
+def test_paging_a_rules_list_does_not_ask_the_llm(gemini):
+    gemini.reply = AssertionError("must not be called")
+
+    chosen, note = pick.choose(TURNS, WHEN, PLACES, use_llm=False)
+
+    assert [p["name"] for p in chosen] == ["A Hot Pot", "B Noodles", "C Grill"]
+    assert note == pick.FALLBACK_NOTE
+
+
 @pytest.mark.parametrize("reason", [
     "4.6 stars from 1,503 reviews, open at 19:00.",
     "4.6分，1503条评价，晚上7点营业。",

@@ -246,6 +246,57 @@ def test_gemini_down_at_ranking_still_gives_an_answer_and_says_so(gemini):
     assert "ordered by rating" in response.text
 
 
+def test_a_rules_list_keeps_paging_by_rules(gemini):
+    # M4 exit check, live: page 1 fell back to the rules, page 2 asked
+    # Gemini again, got a different order, and showed page 1's place twice.
+    response = client.get("/", params={"q": "chinese now"})  # ranking fails
+    link = response.text.split('class="more" href="')[1].split('"')[0].replace("&amp;", "&")
+    assert "by=rules" in link
+
+    gemini.rank_reply = {"picks": [{"id": 1, "reason": "Would reorder everything."}]}
+    page_two = client.get(link)
+
+    assert "Sichuan Garden House" in page_two.text  # rules rank 2, not the LLM's
+    assert "ordered by rating" in page_two.text
+
+
+def test_an_llm_list_does_not_carry_the_rules_flag(gemini):
+    gemini.rank_reply = {"picks": [{"id": 1, "reason": "One."}, {"id": 2, "reason": "Two."}]}
+
+    response = client.get("/", params={"q": "chinese now"})
+
+    assert "by=rules" not in response.text
+
+
+# --- the usage rules (M4.7) ------------------------------------------------------
+
+
+def test_the_rules_are_open_on_the_empty_page():
+    response = client.get("/")
+
+    assert '<details class="rules" open>' in response.text
+    assert "How it works" in response.text
+
+
+def test_the_rules_fold_away_once_there_is_a_result():
+    response = client.get("/", params={"q": "chinese now"})
+
+    assert "How it works" in response.text
+    assert '<details class="rules" open>' not in response.text
+
+
+def test_the_rules_state_the_real_limits(monkeypatch):
+    # Built from the constants the code runs on: change the rule, and the
+    # page changes with it.
+    monkeypatch.setattr(extract, "MAX_QUESTIONS", 5)
+    monkeypatch.setattr(extract, "MEAL_TIMES", {"dinner": "18:30"})
+
+    text = client.get("/").text
+
+    assert "up to 5 follow-up questions" in text
+    assert "dinner 18:30" in text
+
+
 # --- the clarifying loop --------------------------------------------------------
 
 

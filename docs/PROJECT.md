@@ -40,8 +40,9 @@ into M4. M4.0–M4.6 done: the page reads the user's words through Gemini, asks 
 two follow-up questions, searches the place they named or near the browser's
 position, drops places closed at the requested time, and has Gemini pick
 three and explain each in the user's language, with every number checked
-against the data. Address and Google Maps link on the card. 177 passing
-tests. Next: M4.7, the on-page usage rules, then the M4 exit check.
+against the data. Address and Google Maps link on the card; usage rules on
+the page. 184 passing tests. M4 exit check run 2026-11-08: met except that a
+stated budget is not enforced. Next: M4.8, price.
 
 ### Shape (settled 2026-09-11, conversation and location rows revised 2026-11-08)
 
@@ -506,17 +507,20 @@ include clarifying questions and location handling — see DECISIONS.md § M4.0.
   in**, citing only supported conditions. Done in `pick.py`: one call for all
   three; every number in a reason must be one of the place's facts or the
   template replaces it; a failed call falls back to the rules and says so.
-- **M4.7** The page states the rules the user is working with, next to the
-  input, for reference: naming a place helps (otherwise the current location
-  is used); saying when you plan to eat helps (otherwise now is assumed); the
-  app may ask up to two follow-up questions; without a place or a location
-  permission it will ask rather than guess. Written last, so it describes the
-  behaviour as built rather than as planned.
+- **M4.7** ✅ The page states the rules the user is working with, next to the
+  input, rendered from the same constants the code runs on (question cap, meal
+  times).
+- **M4.8** Price. With no budget named, price is ignored. With one named, places
+  at that level go first, unknown price next, other levels last and only to make
+  up three; a reason for a non-matching place says so. Decided in code, like
+  opening hours.
 
 Exit: for five hand-picked test sentences — including "in LA, heading to
 Boston" and one with geolocation refused — the app asks only what is actually
 missing, searches the right place, and the reason sentence references the
-actual conditions asked for and invents nothing.
+actual conditions asked for and invents nothing. **Run 2026-11-08:** met on
+questions, place and invented facts; not met on price, which M4.8 closes. Two
+bugs found and fixed in the run — see DECISIONS.md § M4.7.
 
 ### M5 — Evaluation and cost observability
 

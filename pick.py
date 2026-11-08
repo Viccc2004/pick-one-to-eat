@@ -116,6 +116,9 @@ def _allowed_numbers(place: dict, when_label: str) -> set[float]:
     for value in (place.get("rating"), place.get("rating_count")):
         if value is not None:
             allowed.add(float(value))
+    # Digits in the name are the name, not a claim: "B2J Tasty Pot",
+    # "Pho 75". Found live - a correct reason rejected for repeating "B2J".
+    allowed.update(float(n) for n in _NUMBER_RE.findall(place.get("name", "")))
     for match in _NUMBER_RE.findall(when_label):
         number = float(match)
         allowed.add(number)
@@ -145,16 +148,26 @@ def _fallback(candidates: list[dict], when_label: str) -> list[dict]:
 
 
 def choose(
-    turns: list[tuple[str, str]], when_label: str, places: list[dict]
+    turns: list[tuple[str, str]],
+    when_label: str,
+    places: list[dict],
+    use_llm: bool = True,
 ) -> tuple[list[dict], str | None]:
     """Return (up to three places, each with a "reason"; a note or None).
 
     Places closed at the requested time never reach the LLM. The note is
     set when the rule-based fallback was used, so the page can say so.
+
+    use_llm=False goes straight to the rules. The page passes it when
+    paging through a list that the rules produced: a failed call is not
+    cached, so without it page 2 could ask Gemini again, get a different
+    order, and repeat or skip a place. Found live in the M4 exit check.
     """
     candidates = [p for p in places if p.get("open_then") is not False][:MAX_CANDIDATES]
     if not candidates:
         return [], None
+    if not use_llm:
+        return _fallback(candidates, when_label), FALLBACK_NOTE
 
     try:
         answer = llm.generate_json(
