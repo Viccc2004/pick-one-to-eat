@@ -268,6 +268,69 @@ def test_an_llm_list_does_not_carry_the_rules_flag(gemini):
     assert "by=rules" not in response.text
 
 
+def test_the_budget_match_comes_first_and_a_mismatch_is_flagged(gemini):
+    # Fixtures at the pinned clock: Packard's Corner Grill is the only open
+    # expensive place, so it leads despite its 3.8; rank 2 is a make-weight
+    # and says so.
+    gemini.reply = understood(price="expensive")
+
+    first = client.get("/", params={"q": "fancy chinese now"}).text
+    second = client.get("/", params={"q": "fancy chinese now", "rank": 1}).text
+
+    assert "Packard&#39;s Corner Grill" in first
+    assert "You asked for expensive" not in first
+    assert "You asked for expensive" in second
+
+
+# --- the page itself (front-end redesign) -----------------------------------------
+
+
+def test_the_card_shows_facts_straight_from_the_data():
+    # Corner Dumpling Counter at the pinned clock: 4.7 from 289 reviews,
+    # cheap, and no hours at all. The row is built from Google's fields,
+    # never from the LLM, so it is what the reason is checked against.
+    response = client.get("/", params={"q": "chinese now"})
+
+    for fact in ["<li>★ 4.7</li>", "<li>289 reviews</li>", "<li>Cheap</li>", "<li>Hours unknown</li>"]:
+        assert fact in response.text
+    assert "Pick 1 of 3" in response.text
+
+
+def test_an_open_place_says_when_it_is_open(gemini):
+    gemini.reply = understood(when="later", day="friday", time="19:00")
+
+    response = client.get("/", params={"q": "chinese friday 7pm", "rank": 1})
+
+    assert "<li>Open Friday at 19:00</li>" in response.text
+    assert "· Friday at 19:00" in response.text
+
+
+def test_a_later_meal_without_a_time_is_not_called_unknown_hours(gemini):
+    gemini.reply = understood(when="later", day="tomorrow", time=None)
+    history = ["chinese", "What time?", "tomorrow", "What time?"]
+
+    response = client.get("/", params={"t": history, "q": "not sure"})
+
+    assert "<li>Hours not checked</li>" in response.text
+
+
+def test_the_result_page_does_not_steal_focus():
+    # The search box sits below the answer there; autofocus would scroll
+    # the page past the restaurant on a phone.
+    result = client.get("/", params={"q": "chinese now"}).text
+    home = client.get("/").text
+
+    assert "autofocus" not in result
+    assert "autofocus" in home
+
+
+def test_the_one_script_also_marks_the_form_busy():
+    text = client.get("/").text
+
+    assert 'form.classList.add("busy")' in text
+    assert "pageshow" in text
+
+
 # --- the usage rules (M4.7) ------------------------------------------------------
 
 

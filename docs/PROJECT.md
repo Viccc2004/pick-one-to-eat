@@ -15,7 +15,10 @@ authority. Citations elsewhere in this document point here.
 
 - **Frontend.** Server-rendered HTML. No React, no JS framework, no build
   step. Small amounts of hand-written vanilla JS are allowed where the
-  browser is the only source of a value (see § 3.3, geolocation).
+  browser is the only source of a value (see § 3.3, geolocation). The one
+  script that exists for that also marks the form busy while a submit is in
+  flight, since it already owns the submit (2026-11-08); anything beyond that
+  needs its own decision.
 - **Dev cache.** Development must run against a local cache, so debugging
   does not hit the live API on every run. Constrained by Google's terms —
   see § 3.1.
@@ -41,8 +44,8 @@ two follow-up questions, searches the place they named or near the browser's
 position, drops places closed at the requested time, and has Gemini pick
 three and explain each in the user's language, with every number checked
 against the data. Address and Google Maps link on the card; usage rules on
-the page. 184 passing tests. M4 exit check run 2026-11-08: met except that a
-stated budget is not enforced. Next: M4.8, price.
+the page; a stated budget enforced. 202 passing tests. M4 complete. Next: M5,
+evaluation and cost observability.
 
 ### Shape (settled 2026-09-11, conversation and location rows revised 2026-11-08)
 
@@ -510,7 +513,7 @@ include clarifying questions and location handling — see DECISIONS.md § M4.0.
 - **M4.7** ✅ The page states the rules the user is working with, next to the
   input, rendered from the same constants the code runs on (question cap, meal
   times).
-- **M4.8** Price. With no budget named, price is ignored. With one named, places
+- **M4.8** ✅ Price. With no budget named, price is ignored. With one named, places
   at that level go first, unknown price next, other levels last and only to make
   up three; a reason for a non-matching place says so. Decided in code, like
   opening hours.
@@ -519,7 +522,7 @@ Exit: for five hand-picked test sentences — including "in LA, heading to
 Boston" and one with geolocation refused — the app asks only what is actually
 missing, searches the right place, and the reason sentence references the
 actual conditions asked for and invents nothing. **Run 2026-11-08:** met on
-questions, place and invented facts; not met on price, which M4.8 closes. Two
+questions, place and invented facts; price met after M4.8, verified live. Two
 bugs found and fixed in the run — see DECISIONS.md § M4.7.
 
 ### M5 — Evaluation and cost observability

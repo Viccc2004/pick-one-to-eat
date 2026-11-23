@@ -10,6 +10,7 @@ replaces both with an LLM call; everything else in the app stays put.
 MIN_TRUSTED_RATING_COUNT = 50
 
 PRICE_LABELS = {
+    "PRICE_LEVEL_FREE": "free",
     "PRICE_LEVEL_INEXPENSIVE": "cheap",
     "PRICE_LEVEL_MODERATE": "mid-priced",
     "PRICE_LEVEL_EXPENSIVE": "expensive",

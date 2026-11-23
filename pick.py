@@ -62,7 +62,9 @@ from the name and type), price if they mentioned it, and rating. A rating \
 from fewer than {MIN_TRUSTED_RATING_COUNT} reviews is weak evidence.
 
 For each pick, write a recommendation of two or three short sentences, \
-speaking to the user, in the language the user wrote in.
+speaking to the user. Write it in the language named on the "Write in" \
+line; if there is none, in the language of the user's own messages. The \
+facts below are in English - that is not the user's language.
 
 Rules for every recommendation:
 - Use only the facts listed for that place. Never mention dishes, menu \
@@ -72,8 +74,24 @@ not listed.
 they want to eat.
 - If its hours are unknown, tell them to check the hours before going.
 - If its rating comes from few reviews, say so.
+- If they named a budget and this place's price is different, say so \
+plainly. If its price is unknown, say that.
+- If they named no budget, do not weigh price at all.
 - Do not repeat the address.
+
+When they named a budget, the candidates are listed with matching prices \
+first; keep that order between groups and rank within them.
 """
+
+# What each budget word from extract.PRICES accepts. Strict, as decided
+# 2026-11-08: "cheap" does not stretch to mid-priced. Free counts as cheap.
+PRICE_MATCH = {
+    "cheap": {"PRICE_LEVEL_FREE", "PRICE_LEVEL_INEXPENSIVE"},
+    "moderate": {"PRICE_LEVEL_MODERATE"},
+    "expensive": {"PRICE_LEVEL_EXPENSIVE", "PRICE_LEVEL_VERY_EXPENSIVE"},
+}
+
+_BUDGET_WORDS = {"cheap": "cheap", "moderate": "mid-priced", "expensive": "expensive"}
 
 FALLBACK_NOTE = (
     "Gemini couldn't rank these just now, so they are ordered by rating "
@@ -91,8 +109,7 @@ def _fact_line(index: int, place: dict, when_label: str) -> str:
         facts.append(f"rating: {place['rating']} from {place['rating_count']} reviews")
     else:
         facts.append("rating: unknown")
-    if place.get("price_level") in PRICE_LABELS:
-        facts.append(f"price: {PRICE_LABELS[place['price_level']]}")
+    facts.append(f"price: {PRICE_LABELS.get(place.get('price_level'), 'unknown')}")
     open_then = place.get("open_then")
     facts.append(
         f"open {when_label}: " + {True: "yes", None: "unknown"}.get(open_then, "no")
@@ -100,12 +117,23 @@ def _fact_line(index: int, place: dict, when_label: str) -> str:
     return f"[{index}] " + "; ".join(facts)
 
 
-def build_prompt(turns: list[tuple[str, str]], when_label: str, candidates: list[dict]) -> str:
+def build_prompt(
+    turns: list[tuple[str, str]],
+    when_label: str,
+    candidates: list[dict],
+    price: str | None = None,
+    language: str | None = None,
+) -> str:
     """Deterministic, so the same request is one cache entry."""
     lines = ["Conversation:"]
     for speaker, text in turns:
         lines.append(f"{'User' if speaker == 'user' else 'App'}: {text.strip()}")
-    lines += ["", f"They want to eat: {when_label}", "", "Candidates:"]
+    lines += ["", f"They want to eat: {when_label}"]
+    if price:
+        lines.append(f"Budget they named: {_BUDGET_WORDS[price]}")
+    if language:
+        lines.append(f"Write in: {language}")
+    lines += ["", "Candidates:"]
     lines += [_fact_line(i, p, when_label) for i, p in enumerate(candidates, start=1)]
     return "\n".join(lines)
 
@@ -140,18 +168,79 @@ def numbers_are_supported(reason: str, place: dict, when_label: str) -> bool:
     return all(float(n) in allowed for n in _NUMBER_RE.findall(text))
 
 
-def _fallback(candidates: list[dict], when_label: str) -> list[dict]:
-    return [
-        {**place, "reason": build_reason(place, when_label)}
-        for place in rank_places(candidates)
-    ]
+def _tier(place: dict, price: str | None) -> int:
+    """0 matches the budget, 1 price unknown, 2 a different price.
+
+    With no budget named every place is tier 0, so price changes nothing.
+    """
+    if price is None:
+        return 0
+    level = place.get("price_level")
+    if level in PRICE_MATCH[price]:
+        return 0
+    return 1 if level not in PRICE_LABELS else 2
+
+
+def _budget_pool(candidates: list[dict], price: str | None) -> list[dict]:
+    """Order candidates by tier; keep other prices only to make up three.
+
+    The order inside a tier is Google's, untouched. Places at a different
+    price are offered to the ranking only when fewer than TOP_N match -
+    the user asked for cheap, so with three cheap places a mid-priced one
+    is not a choice at all.
+    """
+    matching = [p for p in candidates if _tier(p, price) == 0]
+    unknown = [p for p in candidates if _tier(p, price) == 1]
+    other = [p for p in candidates if _tier(p, price) == 2]
+    pool = matching + unknown
+    if len(matching) < TOP_N:
+        pool += other
+    return pool
+
+
+def price_note(place: dict, price: str | None) -> str | None:
+    """A sentence the code guarantees, whatever the LLM wrote.
+
+    The prompt asks the model to say when a pick misses the budget; this
+    makes sure the page says it even when the model does not.
+    """
+    tier = _tier(place, price)
+    if tier == 0:
+        return None
+    asked = _BUDGET_WORDS[price]
+    if tier == 1:
+        return f"You asked for {asked}; this place's price level is unknown."
+    return f"You asked for {asked}; this one is {PRICE_LABELS[place['price_level']]}."
+
+
+def _with_notes(chosen: list[dict], price: str | None) -> list[dict]:
+    """Enforce tier order over the picks and attach each price note.
+
+    sorted() is stable, so the LLM's order is kept within a tier; it is
+    only overruled where it put a worse price match above a better one.
+    """
+    chosen = sorted(chosen, key=lambda p: _tier(p, price))
+    return [{**p, "price_note": price_note(p, price)} for p in chosen]
+
+
+def _fallback(candidates: list[dict], when_label: str, price: str | None = None) -> list[dict]:
+    """The rules, one tier at a time, so a budget still holds without Gemini."""
+    ranked: list[dict] = []
+    for tier in (0, 1, 2):
+        ranked += rank_places([p for p in candidates if _tier(p, price) == tier])
+    return _with_notes(
+        [{**place, "reason": build_reason(place, when_label)} for place in ranked[:TOP_N]],
+        price,
+    )
 
 
 def choose(
     turns: list[tuple[str, str]],
     when_label: str,
     places: list[dict],
+    price: str | None = None,
     use_llm: bool = True,
+    language: str | None = None,
 ) -> tuple[list[dict], str | None]:
     """Return (up to three places, each with a "reason"; a note or None).
 
@@ -164,17 +253,20 @@ def choose(
     order, and repeat or skip a place. Found live in the M4 exit check.
     """
     candidates = [p for p in places if p.get("open_then") is not False][:MAX_CANDIDATES]
+    candidates = _budget_pool(candidates, price)
     if not candidates:
         return [], None
     if not use_llm:
-        return _fallback(candidates, when_label), FALLBACK_NOTE
+        return _fallback(candidates, when_label, price), FALLBACK_NOTE
 
     try:
         answer = llm.generate_json(
-            build_prompt(turns, when_label, candidates), SCHEMA, system=SYSTEM
+            build_prompt(turns, when_label, candidates, price, language),
+            SCHEMA,
+            system=SYSTEM,
         )
     except (llm.LLMUnavailable, DailyBudgetExceeded, BudgetUnreadable):
-        return _fallback(candidates, when_label), FALLBACK_NOTE
+        return _fallback(candidates, when_label, price), FALLBACK_NOTE
 
     picks = answer.get("picks") if isinstance(answer, dict) else None
     chosen: list[dict] = []
@@ -206,5 +298,5 @@ def choose(
             break
 
     if not chosen:
-        return _fallback(candidates, when_label), FALLBACK_NOTE
-    return chosen, None
+        return _fallback(candidates, when_label, price), FALLBACK_NOTE
+    return _with_notes(chosen, price), None
