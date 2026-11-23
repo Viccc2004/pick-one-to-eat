@@ -155,3 +155,4 @@ def test_describe_when():
     assert hours.describe_when("now", None, None) == "right now"
     assert hours.describe_when("later", "tomorrow", "19:00") == "tomorrow at 19:00"
     assert hours.describe_when("later", "tomorrow", None) == "then"
+    assert hours.describe_when("later", "friday", "19:00") == "Friday at 19:00"

@@ -1,165 +1,622 @@
+{%- set state = "result" if place else "question" if question else "error" if error else "empty" if searched else "home" -%}
+{%- macro icon(name) -%}
+  <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+  {%- if name == "arrow" -%}<path d="M5 12h14M13 6l6 6-6 6" />
+  {%- elif name == "out" -%}<path d="M7 17 17 7M8 7h9v9" />
+  {%- elif name == "pin" -%}<path d="M12 21s-7-6.1-7-11.4a7 7 0 0 1 14 0C19 14.9 12 21 12 21z" /><circle cx="12" cy="9.6" r="2.4" />
+  {%- elif name == "info" -%}<circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 7.8v.2" />
+  {%- elif name == "alert" -%}<path d="M12 3.5 2.8 19.5h18.4L12 3.5z" /><path d="M12 10v4.2M12 17v.2" />
+  {%- endif -%}
+  </svg>
+{%- endmacro -%}
 <!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>pick-one-to-eat</title>
+    <meta name="color-scheme" content="light dark" />
+    <title>{% if place %}{{ place.name }} · {% endif %}pick-one-to-eat</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍜</text></svg>"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap"
+    />
     <style>
+      /* One display serif for the things that matter - the question, the
+         place - and the system sans for everything else. Ink, paper and a
+         single vermilion accent. Light and dark follow the system. */
+      :root {
+        --paper: #f5f3ee;
+        --surface: #fffefb;
+        --ink: #171614;
+        --ink-soft: #3b3934;
+        --muted: #78736a;
+        --faint: #a59f95;
+        --line: #e3ded4;
+        --accent: #c9432c;
+        --on-accent: #ffffff;
+        --warn-bg: #f4ebd8;
+        --warn-ink: #6c4b10;
+        --danger: #a3301d;
+        --shadow: 0 1px 2px rgb(23 22 20 / 0.04), 0 18px 48px -20px rgb(23 22 20 / 0.22);
+        --serif: "Instrument Serif", "Iowan Old Style", "Palatino Linotype", Georgia,
+          "Songti SC", "Noto Serif SC", "Source Han Serif SC", serif;
+        --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial,
+          "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --paper: #0f0f0e;
+          --surface: #191917;
+          --ink: #f2efe8;
+          --ink-soft: #d2cec5;
+          --muted: #9a958b;
+          --faint: #6b675f;
+          --line: #2b2a27;
+          --accent: #ec6b51;
+          --on-accent: #120b09;
+          --warn-bg: #2a2315;
+          --warn-ink: #e6c483;
+          --danger: #f0907c;
+          --shadow: 0 1px 2px rgb(0 0 0 / 0.5), 0 18px 48px -20px rgb(0 0 0 / 0.8);
+        }
+      }
+
+      * { box-sizing: border-box; }
+      html { -webkit-text-size-adjust: 100%; }
       body {
-        font-family: system-ui, -apple-system, sans-serif;
-        max-width: 34rem;
-        margin: 4rem auto;
-        padding: 0 1rem;
-        line-height: 1.5;
-        color: #1a1a1a;
+        margin: 0;
+        min-height: 100vh;
+        min-height: 100dvh;
+        display: flex;
+        flex-direction: column;
+        background: var(--paper);
+        color: var(--ink);
+        font: 17px/1.55 var(--sans);
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
       }
-      h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
-      .sub { color: #666; margin-top: 0; font-size: 0.9rem; }
-      form { display: flex; gap: 0.5rem; margin: 1.5rem 0; }
-      input[type="text"] {
+      ::selection { background: var(--accent); color: var(--on-accent); }
+      a { color: inherit; }
+      :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+
+      .wrap {
+        width: 100%;
+        max-width: 58rem;
+        margin: 0 auto;
+        padding: 0 clamp(1.25rem, 5vw, 3rem);
+      }
+      main { flex: 1; }
+
+      /* -- header ------------------------------------------------------ */
+      .top {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        padding-top: 1.6rem;
+        padding-bottom: 1.6rem;
+      }
+      .mark {
+        font-family: var(--serif);
+        font-size: 1.65rem;
+        line-height: 1;
+        letter-spacing: -0.01em;
+        text-decoration: none;
+      }
+      .mark span { color: var(--accent); }
+      .top-link {
+        font-size: 0.92rem;
+        color: var(--muted);
+        text-decoration: none;
+        transition: color 0.2s;
+      }
+      .top-link:hover { color: var(--ink); }
+
+      /* -- type -------------------------------------------------------- */
+      .eyebrow {
+        margin: 0 0 1.4rem;
+        font-size: 0.76rem;
+        font-weight: 600;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .eyebrow--error { color: var(--danger); }
+      .display {
+        margin: 0;
+        font-family: var(--serif);
+        font-weight: 400;
+        letter-spacing: -0.018em;
+        text-wrap: balance;
+        overflow-wrap: anywhere;
+      }
+      .display--xl { font-size: clamp(3.2rem, 9.5vw, 6.9rem); line-height: 0.94; }
+      .display--l { font-size: clamp(2.6rem, 7.5vw, 5.4rem); line-height: 0.98; }
+      .display--m { font-size: clamp(2.1rem, 5.2vw, 3.6rem); line-height: 1.05; }
+      .display em { font-style: italic; color: var(--accent); }
+
+      .stage { padding-top: clamp(2.5rem, 12vh, 8.5rem); }
+      .stage--result { padding-top: clamp(1.5rem, 7vh, 4.5rem); }
+
+      /* -- the one input ------------------------------------------------ */
+      .ask {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        max-width: 46rem;
+        margin-top: clamp(2rem, 5vh, 3rem);
+        padding: 0.45rem 0.45rem 0.45rem 1.65rem;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        box-shadow: var(--shadow);
+        transition: border-color 0.2s, box-shadow 0.2s;
+      }
+      .ask:focus-within { border-color: color-mix(in srgb, var(--ink) 45%, var(--line)); }
+      .ask input[type="text"] {
         flex: 1;
-        padding: 0.6rem 0.75rem;
-        font-size: 1rem;
-        border: 1px solid #ccc;
-        border-radius: 6px;
-      }
-      button {
-        padding: 0.6rem 1.1rem;
-        font-size: 1rem;
+        min-width: 0;
+        padding: 0.95rem 0;
         border: 0;
-        border-radius: 6px;
-        background: #1a1a1a;
-        color: #fff;
+        outline: 0;
+        background: transparent;
+        color: var(--ink);
+        font: inherit;
+        font-size: clamp(1.05rem, 2.3vw, 1.28rem);
+      }
+      .ask input::placeholder { color: var(--faint); }
+      .ask button {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.55rem;
+        height: 3.45rem;
+        padding: 0 1.55rem;
+        border: 0;
+        border-radius: 999px;
+        background: var(--ink);
+        color: var(--paper);
+        font: 600 1rem var(--sans);
         cursor: pointer;
+        transition: background 0.2s, color 0.2s, transform 0.15s;
       }
-      .error {
-        border: 1px solid #d9534f;
-        border-radius: 6px;
-        padding: 0.75rem 1rem;
-        background: #fdf3f2;
+      .ask button:hover { background: var(--accent); color: var(--on-accent); }
+      .ask button:active { transform: scale(0.97); }
+      .ask button svg { width: 1.1em; height: 1.1em; transition: transform 0.2s; }
+      .ask button:hover svg { transform: translateX(2px); }
+      .ask--compact { margin-top: 1rem; box-shadow: none; padding-left: 1.35rem; }
+      .ask--compact input[type="text"] { padding: 0.75rem 0; font-size: 1.05rem; }
+      .ask--compact button { height: 2.95rem; padding: 0 1.25rem; }
+
+      /* busy: set by the script on submit, while location and the answer load */
+      .ask.busy { border-color: var(--line); }
+      .ask.busy button { cursor: progress; background: var(--ink); color: var(--paper); }
+      .ask.busy button svg { display: none; }
+      .ask.busy button::before {
+        content: "";
+        width: 1em;
+        height: 1em;
+        border: 2px solid currentColor;
+        border-right-color: transparent;
+        border-radius: 50%;
+        animation: spin 0.75s linear infinite;
       }
-      .error p { margin: 0.25rem 0; }
-      .detail { color: #777; font-size: 0.85rem; word-break: break-word; }
-      .card {
-        border: 1px solid #e2e2e2;
-        border-radius: 10px;
-        padding: 1.25rem;
-        background: #fafafa;
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      .hint { margin: 1.1rem 0 0 1.65rem; font-size: 0.92rem; color: var(--muted); }
+      .quiet {
+        display: inline-block;
+        margin: 1.1rem 0 0 1.65rem;
+        font-size: 0.92rem;
+        color: var(--muted);
+        text-decoration: none;
       }
-      .card h2 { margin: 0 0 0.4rem; font-size: 1.2rem; }
-      .card p { margin: 0; color: #333; }
-      .card .reason { line-height: 1.6; }
-      .card .address { color: #666; font-size: 0.9rem; margin: 0 0 0.6rem; }
-      .card .maps { display: inline-block; margin-top: 0.75rem; font-size: 0.9rem; }
-      .more { display: inline-block; margin-top: 1rem; font-size: 0.9rem; }
-      .empty { color: #666; }
-      .chat { margin: 1.5rem 0 0; padding: 0; list-style: none; }
-      .chat li { margin: 0.4rem 0; padding: 0.5rem 0.75rem; border-radius: 8px; max-width: 85%; }
-      .chat .user { background: #1a1a1a; color: #fff; margin-left: auto; width: fit-content; }
-      .chat .app { background: #f0f0f0; width: fit-content; }
-      .question { font-weight: 600; }
-      .understood { color: #666; font-size: 0.85rem; margin: 0 0 0.5rem; }
-      .assumption { color: #8a5a00; font-size: 0.85rem; margin: 0.5rem 0 0; }
-      .restart { font-size: 0.85rem; }
-      .rules { margin: 0 0 1.5rem; font-size: 0.88rem; color: #444; }
-      .rules summary { cursor: pointer; color: #666; }
-      .rules ul { margin: 0.5rem 0 0; padding-left: 1.1rem; }
-      .rules li { margin: 0.35rem 0; }
-      .stub {
-        margin-top: 2.5rem;
-        padding-top: 1rem;
-        border-top: 1px solid #eee;
+      .quiet:hover { color: var(--ink); }
+
+      /* -- a follow-up question ---------------------------------------- */
+      .thread {
+        list-style: none;
+        margin: 0 0 1.75rem;
+        padding: 0;
+        display: grid;
+        gap: 0.45rem;
+      }
+      .thread li { display: flex; gap: 1rem; color: var(--ink-soft); font-size: 1rem; }
+      .thread .who {
+        flex: none;
+        width: 3.6rem;
+        padding-top: 0.22rem;
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--faint);
+      }
+
+      /* -- the answer --------------------------------------------------- */
+      .query {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 0.35rem 0.9rem;
+        margin: 0;
+        color: var(--ink-soft);
+      }
+      .label {
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--faint);
+      }
+      .aside {
+        display: flex;
+        gap: 0.5rem;
+        margin: 0.6rem 0 0;
+        font-size: 0.9rem;
+        color: var(--muted);
+      }
+      .aside svg { flex: none; width: 1rem; height: 1rem; margin-top: 0.2rem; }
+      .count {
+        margin: clamp(2.25rem, 7vh, 4rem) 0 1rem;
+        font-size: 0.76rem;
+        font-weight: 600;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+      .address {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.45rem;
+        margin: 1.2rem 0 0;
+        color: var(--muted);
+      }
+      .address svg { flex: none; width: 1.05rem; height: 1.05rem; margin-top: 0.22rem; }
+      .facts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin: 1.6rem 0 0;
+        padding: 0;
+        list-style: none;
+      }
+      .facts li {
+        padding: 0.32rem 0.85rem;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--surface);
+        font-size: 0.88rem;
+        color: var(--ink-soft);
+      }
+      .reason {
+        max-width: 40rem;
+        margin: 2rem 0 0;
+        font-size: clamp(1.12rem, 2.2vw, 1.3rem);
+        line-height: 1.72;
+      }
+      .notes { display: grid; gap: 0.55rem; max-width: 40rem; margin-top: 1.6rem; }
+      .note {
+        display: flex;
+        gap: 0.65rem;
+        margin: 0;
+        padding: 0.8rem 1rem;
+        border-radius: 14px;
+        background: var(--warn-bg);
+        color: var(--warn-ink);
+        font-size: 0.92rem;
+        line-height: 1.5;
+      }
+      .note svg { flex: none; width: 1.05rem; height: 1.05rem; margin-top: 0.12rem; }
+      .actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 2.4rem; }
+      .btn,
+      .more {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.55rem;
+        height: 3.2rem;
+        padding: 0 1.5rem;
+        border-radius: 999px;
+        font-size: 0.98rem;
+        font-weight: 600;
+        text-decoration: none;
+        transition: background 0.2s, color 0.2s, border-color 0.2s, transform 0.15s;
+      }
+      .btn svg,
+      .more svg { width: 1.05em; height: 1.05em; }
+      .btn { background: var(--ink); color: var(--paper); }
+      .btn:hover { background: var(--accent); color: var(--on-accent); }
+      .more { border: 1px solid var(--line); color: var(--ink); }
+      .more:hover { border-color: var(--ink); }
+      .btn:active,
+      .more:active { transform: scale(0.97); }
+
+      .again {
+        margin-top: clamp(3.5rem, 11vh, 6.5rem);
+        padding-top: 2rem;
+        border-top: 1px solid var(--line);
+      }
+
+      .detail {
+        max-width: 40rem;
+        margin: 1.2rem 0 0;
+        color: var(--muted);
+        font-size: 0.95rem;
+        overflow-wrap: anywhere;
+      }
+
+      /* -- how it works -------------------------------------------------- */
+      .rules {
+        margin-top: clamp(4rem, 13vh, 8rem);
+        padding-top: 1.6rem;
+        border-top: 1px solid var(--line);
+      }
+      .rules summary {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.6rem;
+        list-style: none;
+        cursor: pointer;
+        font-size: 0.74rem;
+        font-weight: 600;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .rules summary::-webkit-details-marker { display: none; }
+      .rules summary::after {
+        content: "+";
+        font-size: 1.05rem;
+        font-weight: 400;
+        letter-spacing: 0;
+        transition: transform 0.2s;
+      }
+      .rules[open] summary::after { transform: rotate(45deg); }
+      .rules summary:hover { color: var(--ink); }
+      .rules ul {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+        gap: 1.75rem 2.5rem;
+        margin: 1.75rem 0 0;
+        padding: 0;
+        list-style: none;
+      }
+      .rules li { font-size: 0.93rem; line-height: 1.6; color: var(--ink-soft); }
+      .rules li strong {
+        display: block;
+        margin-bottom: 0.35rem;
+        font-family: var(--serif);
+        font-size: 1.45rem;
+        font-weight: 400;
+        line-height: 1.1;
+        color: var(--ink);
+      }
+
+      .foot {
+        padding-top: 3.5rem;
+        padding-bottom: 2rem;
         font-size: 0.8rem;
-        color: #888;
+        color: var(--faint);
+      }
+
+      /* -- entrance ------------------------------------------------------ */
+      .rise { animation: rise 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+      .rise-2 { animation-delay: 0.06s; }
+      .rise-3 { animation-delay: 0.12s; }
+      @keyframes rise {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: none; }
+      }
+
+      @media (max-width: 34rem) {
+        body { font-size: 16px; }
+        .ask { padding-left: 1.2rem; }
+        .ask button { width: 3.3rem; height: 3.3rem; padding: 0; justify-content: center; }
+        .ask--compact button { width: 2.95rem; height: 2.95rem; }
+        .ask button .btn-label { display: none; }
+        .hint,
+        .quiet { margin-left: 1.2rem; }
+        .actions .btn,
+        .actions .more { flex: 1 1 100%; justify-content: center; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before { animation: none !important; transition: none !important; }
       }
     </style>
   </head>
-  <body>
-    <h1>pick-one-to-eat</h1>
-    <p class="sub">Say what you feel like eating. Get one place.</p>
+  <body class="is-{{ state }}">
+    <header class="top wrap">
+      <a class="mark" href="/">pick one<span>.</span></a>
+      {% if state != "home" %}<a class="top-link" href="/">New search</a>{% endif %}
+    </header>
 
-    {% if question %}
-      <ul class="chat">
-        {% for speaker, text in history %}
-          <li class="{{ speaker }}">{{ text }}</li>
-        {% endfor %}
-        <li class="app question">{{ question }}</li>
-      </ul>
-    {% endif %}
+    <main class="wrap">
+      {% if state == "result" %}
+        <article class="stage stage--result">
+          <p class="query rise"><span class="label">Searched for</span> {{ understood }}</p>
+          {% if near_you %}<p class="aside rise">{{ icon("info") }}<span>{{ near_you }}</span></p>{% endif %}
 
-    <form id="ask" action="/" method="get">
-      {% for text in carry %}
-        <input type="hidden" name="t" value="{{ text }}" />
-      {% endfor %}
-      <input type="hidden" name="lat" value="{{ carry_coords[0] if carry_coords else '' }}" />
-      <input type="hidden" name="lng" value="{{ carry_coords[1] if carry_coords else '' }}" />
-      <input
-        type="text"
-        name="q"
-        value="{{ q }}"
-        placeholder="{% if question %}Your answer{% else %}cheap dumplings in Allston, tonight at 7{% endif %}"
-        autofocus
-      />
-      <button type="submit">{% if question %}Answer{% else %}Pick one{% endif %}</button>
-    </form>
-    {% if question %}<a class="restart" href="/">Start over</a>{% endif %}
+          <p class="count rise rise-2">Pick {{ rank + 1 }} of {{ total }}</p>
+          <h1 class="display display--l rise rise-2">{{ place.name }}</h1>
+          {% if place.address %}<p class="address rise rise-2">{{ icon("pin") }}<span>{{ place.address }}</span></p>{% endif %}
+          {% if facts %}
+            <ul class="facts rise rise-3">
+              {% for fact in facts %}<li>{{ fact }}</li>{% endfor %}
+            </ul>
+          {% endif %}
 
-    <details class="rules" {% if not (place or question or error or searched) %}open{% endif %}>
-      <summary>How it works</summary>
-      <ul>
-        <li>
-          <strong>Say what you feel like, in any language.</strong> The
-          recommendation comes back in the language you wrote in.
-        </li>
-        <li>
-          <strong>Where:</strong> name a place ("in Boston") to search there.
-          Otherwise it searches near your current location &mdash; your browser
-          will ask for permission. If you name no place and location is off, it
-          asks where; it never guesses.
-        </li>
-        <li>
-          <strong>When:</strong> say when you'll eat ("now", "Friday 7pm").
-          Meals count as
-          {% for meal, time in meal_times.items() %}{{ meal }} {{ time }}{% if not loop.last %}, {% endif %}{% endfor %}.
-        </li>
-        <li>
-          <strong>Budget:</strong> say "cheap", "mid-priced" or "fancy" and places
-          at that price come first; others appear only to make up three, and are
-          marked. Say nothing and price is ignored.
-        </li>
-        <li>
-          <strong>It may ask up to {{ max_questions }} follow-up questions.</strong>
-          After that it stops asking: no time means now. It still needs a place.
-        </li>
-        <li>
-          <strong>Only places open then.</strong> Places closed at that time are
-          skipped. If a place's hours are unknown, it says so &mdash; call ahead.
-        </li>
-        <li>
-          <strong>Only real facts.</strong> The reason uses only what Google
-          returns: rating, number of reviews, price level and hours. Nothing about
-          dishes, atmosphere or wait times.
-        </li>
-      </ul>
-    </details>
+          <p class="reason rise rise-3">{{ reason }}</p>
+
+          {% if place.price_note or fallback_note or assumptions %}
+            <div class="notes rise rise-3">
+              {% if place.price_note %}<p class="note">{{ icon("alert") }}<span>{{ place.price_note }}</span></p>{% endif %}
+              {% for note in assumptions %}<p class="note">{{ icon("alert") }}<span>{{ note }}</span></p>{% endfor %}
+              {% if fallback_note %}<p class="note">{{ icon("info") }}<span>{{ fallback_note }}</span></p>{% endif %}
+            </div>
+          {% endif %}
+
+          <div class="actions rise rise-3">
+            {% if place.maps_url %}
+              <a class="btn" href="{{ place.maps_url }}" target="_blank" rel="noopener noreferrer">Open in Google Maps {{ icon("out") }}</a>
+            {% endif %}
+            {% if more_url %}
+              <a class="more" href="{{ more_url }}">Show me another {{ icon("arrow") }}</a>
+            {% endif %}
+          </div>
+        </article>
+        <div class="again">
+          <p class="label">Something else?</p>
+      {% elif state == "question" %}
+        <section class="stage">
+          <ol class="thread rise">
+            {% for speaker, text in history %}
+              <li><span class="who">{{ "You" if speaker == "user" else "Asked" }}</span><span>{{ text }}</span></li>
+            {% endfor %}
+          </ol>
+          <h1 class="display display--m rise rise-2">{{ question }}</h1>
+      {% elif state == "error" %}
+        <section class="stage">
+          <p class="eyebrow eyebrow--error rise">Something went wrong</p>
+          <h1 class="display display--m rise rise-2">{{ error }}</h1>
+          {% if detail %}<p class="detail rise rise-2">{{ detail }}</p>{% endif %}
+      {% elif state == "empty" %}
+        <section class="stage">
+          <p class="query rise"><span class="label">Searched for</span> {{ understood }}</p>
+          {% if near_you %}<p class="aside rise">{{ icon("info") }}<span>{{ near_you }}</span></p>{% endif %}
+          <h1 class="display display--m rise rise-2" style="margin-top: 2.5rem">
+            {% if all_closed %}Everything found is closed {{ when_label }}.{% else %}Nothing came back for that.{% endif %}
+          </h1>
+          <p class="detail rise rise-2">
+            {% if all_closed %}Try another time or place.{% else %}Try different words.{% endif %}
+          </p>
+      {% else %}
+        <section class="stage">
+          <p class="eyebrow rise">One sentence in · one place out</p>
+          <h1 class="display display--xl rise rise-2">What do you feel like <em>eating?</em></h1>
+      {% endif %}
+
+          <form id="ask" action="/" method="get" class="ask{% if state == 'result' %} ask--compact{% endif %} rise rise-3">
+            {% for text in carry %}
+              <input type="hidden" name="t" value="{{ text }}" />
+            {% endfor %}
+            <input type="hidden" name="lat" value="{{ carry_coords[0] if carry_coords else '' }}" />
+            <input type="hidden" name="lng" value="{{ carry_coords[1] if carry_coords else '' }}" />
+            <input
+              type="text"
+              name="q"
+              value="{{ q }}"
+              aria-label="{% if question %}Your answer{% else %}What do you feel like eating?{% endif %}"
+              placeholder="{% if question %}Your answer{% elif state == 'result' %}Try something else{% else %}cheap dumplings in Allston, tonight at 7{% endif %}"
+              autocomplete="off"
+              required
+              {% if state != "result" %}autofocus{% endif %}
+            />
+            <button type="submit" aria-label="{% if question %}Answer{% else %}Pick one{% endif %}">
+              <span class="btn-label">{% if question %}Answer{% else %}Pick one{% endif %}</span>{{ icon("arrow") }}
+            </button>
+          </form>
+
+          {% if state == "home" %}
+            <p class="hint rise rise-3">Write in any language — the answer comes back in yours.</p>
+          {% elif state == "question" %}
+            <a class="quiet" href="/">Start over</a>
+          {% endif %}
+      {% if state == "result" %}
+        </div>
+      {% else %}
+        </section>
+      {% endif %}
+
+      <details class="rules" {% if state == "home" %}open{% endif %}>
+        <summary>How it works</summary>
+        <ul>
+          <li>
+            <strong>Where</strong>
+            Name a place ("in Boston") to search there. Otherwise it searches near
+            your current location &mdash; your browser will ask. With no place and
+            location off, it asks where; it never guesses.
+          </li>
+          <li>
+            <strong>When</strong>
+            Say when you'll eat ("now", "Friday 7pm"). Meals count as
+            {% for meal, time in meal_times.items() %}{{ meal }} {{ time }}{% if not loop.last %}, {% endif %}{% endfor %}.
+          </li>
+          <li>
+            <strong>Budget</strong>
+            Say "cheap", "mid-priced" or "fancy" and places at that price come first;
+            others appear only to make up three, and are marked. Say nothing and
+            price is ignored.
+          </li>
+          <li>
+            <strong>Questions</strong>
+            It may ask up to {{ max_questions }} follow-up questions. After that it stops asking: no
+            time means now. It still needs a place.
+          </li>
+          <li>
+            <strong>Open then</strong>
+            Places closed at that time are skipped. If a place's hours are unknown,
+            it says so &mdash; call ahead.
+          </li>
+          <li>
+            <strong>Only real facts</strong>
+            The reason uses only what Google returns: rating, number of reviews,
+            price level and hours. Nothing about dishes, atmosphere or wait times.
+          </li>
+        </ul>
+      </details>
+    </main>
+
+    <footer class="foot wrap">
+      {% if live %}Places from Google, capped at 30 searches a day{% else %}Hand-written fixture places, no Google calls{% endif %}
+      · Read, picked and explained by Gemini, using only the facts Google returned.
+    </footer>
 
     <script>
-      // The one piece of JavaScript in the app (docs/PROJECT.md § 3.3):
-      // the browser is the only source of the user's position. On submit,
-      // if no position is in the form yet, ask for one, round it to 3
-      // decimals (~110 m, matching find.COORD_DECIMALS) and submit. Refused,
+      // The page's only JavaScript (docs/PROJECT.md § 3.3). Its job is the
+      // user's position: the browser is the only source of it. On submit, if
+      // the form has no position yet, ask for one, round it to 3 decimals
+      // (~110 m, matching find.COORD_DECIMALS) and submit. Refused,
       // unavailable or slower than 8 s: submit without it, and the server
-      // asks where instead.
+      // asks where instead. Because it already owns the submit, it also
+      // marks the form busy while the answer loads - see DECISIONS.md
+      // § Front-end redesign.
       (function () {
         var form = document.getElementById("ask");
-        if (!form || !navigator.geolocation) return;
-        form.addEventListener("submit", function (event) {
-          if (form.elements.lat.value) return;
-          event.preventDefault();
-          var button = form.querySelector("button");
+        if (!form) return;
+        var button = form.querySelector("button");
+        var label = button.querySelector(".btn-label");
+        var idle = label.textContent;
+
+        function busy(text) {
+          form.classList.add("busy");
           button.disabled = true;
-          button.textContent = "Locating...";
-          var send = function () { form.submit(); };
+          label.textContent = text;
+        }
+
+        // Coming back with the Back button can restore the page mid-"busy".
+        window.addEventListener("pageshow", function () {
+          form.classList.remove("busy");
+          button.disabled = false;
+          label.textContent = idle;
+        });
+
+        form.addEventListener("submit", function (event) {
+          if (form.elements.lat.value || !navigator.geolocation) {
+            busy("Picking…");
+            return;
+          }
+          event.preventDefault();
+          busy("Locating…");
+          var send = function () {
+            label.textContent = "Picking…";
+            form.submit();
+          };
           navigator.geolocation.getCurrentPosition(
             function (pos) {
               form.elements.lat.value = pos.coords.latitude.toFixed(3);
@@ -172,51 +629,5 @@
         });
       })();
     </script>
-
-    {% if error %}
-      <div class="error">
-        <p><strong>{{ error }}</strong></p>
-        {% if detail %}<p class="detail">{{ detail }}</p>{% endif %}
-      </div>
-    {% elif place %}
-      <p class="understood">Searched for: {{ understood }}</p>
-      {% if near_you %}<p class="assumption">{{ near_you }}</p>{% endif %}
-      <div class="card">
-        <h2>{{ place.name }}</h2>
-        {% if place.address %}<p class="address">{{ place.address }}</p>{% endif %}
-        <p class="reason">{{ reason }}</p>
-        {% if place.price_note %}<p class="assumption">{{ place.price_note }}</p>{% endif %}
-        {% if fallback_note %}<p class="assumption">{{ fallback_note }}</p>{% endif %}
-        {% for note in assumptions %}<p class="assumption">{{ note }}</p>{% endfor %}
-        {% if place.maps_url %}
-          <a class="maps" href="{{ place.maps_url }}" target="_blank" rel="noopener noreferrer"
-            >Open in Google Maps ↗</a
-          >
-        {% endif %}
-      </div>
-      {% if more_url %}
-        <a class="more" href="{{ more_url }}">Not this one - show me another</a>
-      {% endif %}
-    {% elif searched %}
-      <p class="understood">Searched for: {{ understood }}</p>
-      {% if near_you %}<p class="assumption">{{ near_you }}</p>{% endif %}
-      {% if all_closed %}
-        <p class="empty">Everything found is closed {{ when_label }}. Try another time or place.</p>
-      {% else %}
-        <p class="empty">Nothing came back for that. Try different words.</p>
-      {% endif %}
-    {% endif %}
-
-    <p class="stub">
-      {% if live %}
-        Results come from the live Places API, capped at 30 calls a day and
-        cached for 24 hours.
-      {% else %}
-        Results come from hand-written fixtures, not the live Places API. No
-        API key, no network call, no cost.
-      {% endif %}
-      Gemini reads your words, picks the place and writes the reason, using
-      only the facts Google returned.
-    </p>
   </body>
 </html>

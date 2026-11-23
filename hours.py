@@ -110,10 +110,17 @@ def annotate(places: list[dict], when: str, day: str | None, time: str | None) -
         place["open_then"] = None if target is None else is_open(place["periods"], *target)
 
 
+def day_label(day: str | None) -> str:
+    """ "today" and "tomorrow" stay lower case; a weekday is a name."""
+    if day in _WEEKDAYS:
+        return day.capitalize()
+    return day or "today"
+
+
 def describe_when(when: str, day: str | None, time: str | None) -> str:
     """The time being checked, as the reason sentence names it."""
     if when == "now":
         return "right now"
     if time is None:
         return "then"
-    return f"{day or 'today'} at {time}"
+    return f"{day_label(day)} at {time}"

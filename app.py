@@ -14,6 +14,7 @@ import pick
 from cache import BudgetUnreadable, DailyBudgetExceeded
 from find import PlacesUnavailable, parse_places, search_places
 from llm import LLMUnavailable
+from recommend import PRICE_LABELS
 
 app = FastAPI()
 
@@ -81,10 +82,34 @@ def _describe(req: extract.Request) -> str:
     if req.when == "now":
         when = "now"
     elif req.time:
-        when = f"{req.day} at {req.time}"
+        when = f"{hours.day_label(req.day)} at {req.time}"
     else:
-        when = req.day or "later"
+        when = hours.day_label(req.day) if req.day else "later"
     return f"{req.search_text} · {where} · {when}"
+
+
+def _facts(place: dict, when_label: str, checked: bool) -> list[str]:
+    """The card's at-a-glance row, built from Google's data alone.
+
+    Never from the LLM: these are the facts the reason is checked against,
+    so they are shown as they are. `checked` is False when no time was
+    given for a later meal, so "hours unknown" would be the wrong excuse.
+    """
+    facts = []
+    if place.get("rating") is not None:
+        facts.append(f"★ {place['rating']}")
+    count = place.get("rating_count")
+    if count is not None:
+        facts.append("1 review" if count == 1 else f"{count:,} reviews")
+    if place.get("price_level") in PRICE_LABELS:
+        facts.append(PRICE_LABELS[place["price_level"]].capitalize())
+    if place.get("open_then") is True:
+        facts.append(f"Open {when_label}")
+    elif not checked:
+        facts.append("Hours not checked")
+    else:
+        facts.append("Hours unknown")
+    return facts
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -124,6 +149,8 @@ def home(
         "searched": False,
         "all_closed": False,
         "fallback_note": None,
+        "facts": [],
+        "total": 0,
         "live": find.USE_LIVE_API,
         # The usage rules on the page are built from the same constants the
         # code runs on, so the page cannot describe a rule that is not real.
@@ -198,6 +225,12 @@ def home(
         context["rank"] = rank
         context["place"] = place
         context["reason"] = place["reason"]
+        context["total"] = len(candidates)
+        context["facts"] = _facts(
+            place,
+            when_label,
+            checked=understood.when == "now" or understood.time is not None,
+        )
 
         if rank + 1 < len(candidates):
             # Same conversation, next candidate. Re-reading it is a cache

@@ -15,7 +15,10 @@ authority. Citations elsewhere in this document point here.
 
 - **Frontend.** Server-rendered HTML. No React, no JS framework, no build
   step. Small amounts of hand-written vanilla JS are allowed where the
-  browser is the only source of a value (see § 3.3, geolocation).
+  browser is the only source of a value (see § 3.3, geolocation). The one
+  script that exists for that also marks the form busy while a submit is in
+  flight, since it already owns the submit (2026-11-08); anything beyond that
+  needs its own decision.
 - **Dev cache.** Development must run against a local cache, so debugging
   does not hit the live API on every run. Constrained by Google's terms —
   see § 3.1.

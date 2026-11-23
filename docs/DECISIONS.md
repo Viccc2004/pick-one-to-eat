@@ -1108,3 +1108,46 @@ letters and spaces, at most 30 characters, before it is pasted into the
 next prompt — a value the model wrote must not become a way to inject
 instructions into another call. After the fix: Chinese in, Chinese out;
 English in, English out.
+
+## Front-end redesign — 2026-11-08
+
+Asked for: "简约，直接，大气" — minimal, direct, generous. One template,
+hand-written CSS, still no framework and no build step.
+
+### The thing that matters is the headline
+Each state puts its one important thing in a large display serif: the
+question "What do you feel like eating?" on the empty page, the app's
+follow-up question when it asks, the restaurant's name on a result, the
+failure itself on an error. Everything else is small sans text, so the
+hierarchy needs no boxes or dividers to explain it. Ink on paper with
+one vermilion accent; light and dark follow the system.
+
+### Instrument Serif from Google Fonts, with fallbacks
+The display face is the page's only external asset, loaded with
+`display=swap`. If Google Fonts is unreachable the page falls back to
+Iowan Old Style / Palatino / Georgia, and to Songti or Noto Serif SC for
+Chinese restaurant names, and still reads correctly.
+
+### A facts row built from the data, never from the LLM
+Under the name: rating, review count, price level, and open-at-that-time
+(or "Hours unknown", or "Hours not checked" when no time was given). These
+are exactly the fields the reason's numbers are checked against, shown as
+they are, so a reader can see the evidence next to the prose.
+
+### The script marks the form busy
+A recommendation can take several seconds while Gemini answers, and the
+old page gave no sign anything was happening. The geolocation script
+already intercepts the submit, so it now also disables the button and
+shows "Locating…" / "Picking…" with a spinner. A `pageshow` handler
+undoes it when the Back button restores the page. PROJECT.md § 0 was
+amended to say so rather than let the JavaScript rule widen silently.
+
+### No autofocus on the result page
+The search box sits below the answer there; autofocus would scroll a
+phone past the restaurant. A test pins it.
+
+### Checked by eye, not only by tests
+Rendered with headless Chrome and inspected: empty page, follow-up
+question, result (light and dark), error, everything-closed, and a true
+390 px phone viewport (an iframe, since headless windows have a minimum
+width that makes a plain small-window screenshot look clipped).
